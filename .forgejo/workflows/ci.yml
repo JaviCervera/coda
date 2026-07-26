@@ -4,9 +4,11 @@ on: [push, pull_request]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: codeberg-tiny
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - name: Unit & runtime tests
         run: python -m unittest discover tests/ -v
       - name: End-to-end example
