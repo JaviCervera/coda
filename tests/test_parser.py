@@ -96,8 +96,8 @@ class TestParser(unittest.TestCase):
 
     def test_inheritance(self):
         source = """
-        struct Sprite { struct Entity base; int x; };
-        impl Sprite : Entity {
+        struct Sprite : Entity { int x; };
+        impl Sprite {
             init(int id, int x, int y) {
                 self->base.init(id);
                 self->x = x;
@@ -105,12 +105,11 @@ class TestParser(unittest.TestCase):
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "impl"]
-        self.assertGreaterEqual(len(impls), 1)
-        impl = impls[0].body
-        self.assertGreater(len(impl.base_name_tokens), 0)
-        base_name = "".join(t.spelling for t in impl.base_name_tokens)
-        self.assertEqual(base_name, "Entity")
+        structs = [d for d in module.top_level if d.kind == "struct"]
+        self.assertGreaterEqual(len(structs), 1)
+        sd = structs[0].body
+        self.assertIsNotNone(sd.base_name_token)
+        self.assertEqual(sd.base_name_token.spelling, "Entity")
 
     def test_template_struct(self):
         source = """

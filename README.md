@@ -12,8 +12,8 @@ compiler architecture and lowering strategy are documented in
 
 - **Struct methods** — `impl Point { void move(...) { ... } }`
 - **Construction / destruction** — explicit `init` / `deinit` (never implicit)
-- **Single inheritance** — `struct Rectangle { struct Shape base; ... };`
-  with an `impl Rectangle : Shape { ... }`
+- **Single inheritance** — `struct Rectangle : Shape { ... };` with
+  auto-injected `struct Shape base;` field
 - **Virtual dispatch** — `virtual double area(void);` + override in derived
 - **Operator overloading** — `struct Vec2 operator+(struct Vec2 rhs) { ... }`
 - **Templates** — `template<T> struct Array { ... }`
@@ -70,13 +70,12 @@ impl Shape {
     }
 }
 
-struct Rectangle {
-    struct Shape base;
+struct Rectangle : Shape {
     double width;
     double height;
 };
 
-impl Rectangle : Shape {
+impl Rectangle {
     init(double width, double height) {
         self->base.init();
         self->width = width;

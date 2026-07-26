@@ -17,6 +17,7 @@ class StructType:
     is_coda_owned: bool
     has_virtual: bool = False
     module_path: str = ""
+    base_name: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,17 +83,37 @@ class SemanticAnalyzer:
 
     def _register_struct(self, sd: StructDecl, module_path: str):
         name = sd.name_token.spelling
+        base_name: str | None = None
+        fields = list(sd.fields)
+
+        if sd.base_name_token:
+            base_name = sd.base_name_token.spelling
+            for fd in fields:
+                ids = [t for t in fd.tokens if t.kind == "identifier"]
+                if ids and ids[-1].spelling == "base":
+                    self._diag("E020", f"struct '{name}' inherits from '{base_name}' but has an explicit 'base' field",
+                               span=sd.base_name_token.span)
+                    break
+            else:
+                base_token = Token("keyword", "struct", sd.base_name_token.span)
+                name_token = Token("identifier", base_name, sd.base_name_token.span)
+                field_name = Token("identifier", "base", sd.base_name_token.span)
+                semi = Token(";", ";", sd.base_name_token.span)
+                fields.insert(0, FieldDecl(tokens=[base_token, name_token, field_name, semi]))
+
         st = StructType(
             name=name,
-            fields=tuple(sd.fields),
+            fields=tuple(fields),
             is_coda_owned=True,
             module_path=module_path,
+            base_name=base_name,
         )
         self.structs[name] = st
 
     def _register_implementation(self, impl: Implementation, module_path: str):
         struct_name = "".join(t.spelling for t in impl.name_tokens)
-        base_name = "".join(t.spelling for t in impl.base_name_tokens) if impl.base_name_tokens else None
+        st = self.structs.get(struct_name)
+        base_name = st.base_name if st else None
 
         info = ImplementationInfo(
             struct_name=struct_name,

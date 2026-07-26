@@ -179,8 +179,8 @@ Default arguments are not supported in 0.1. Use an explicit helper or factory.
 
 ## Single inheritance
 
-Inheritance is declared on an implementation. The base object is explicitly the
-first field of the derived struct.
+Inheritance is declared on the struct. Coda injects a `struct BaseName base;`
+field as the first field of the derived struct.
 
 ```coda
 struct Entity {
@@ -193,13 +193,12 @@ impl Entity {
     }
 }
 
-struct Sprite {
-    struct Entity base;       // required first field
+struct Sprite : Entity {
     int x;
     int y;
 };
 
-impl Sprite : Entity {
+impl Sprite {
     init(int id, int x, int y) {
         self->base.init(id);
         self->x = x;
@@ -208,9 +207,10 @@ impl Sprite : Entity {
 }
 ```
 
-`impl Sprite : Entity` declares that `Sprite` derives from `Entity`.
-Coda verifies that `struct Entity base;` is the first field. There is no multiple
-inheritance, mixin system, or implicit base-constructor call.
+`struct Sprite : Entity` declares that `Sprite` derives from `Entity`.
+Coda inserts `struct Entity base;` as the first field. There is no multiple
+inheritance, mixin system, or implicit base-constructor call. The inherited
+`base` field name may be used explicitly in Coda code as shown above.
 
 ## Virtual methods
 
@@ -228,12 +228,11 @@ impl Entity {
     }
 }
 
-struct Sprite {
-    struct Entity base;
+struct Sprite : Entity {
     int x;
 };
 
-impl Sprite : Entity {
+impl Sprite {
     virtual void update(void) {
         self->x++;
     }

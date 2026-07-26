@@ -80,7 +80,9 @@ class Lowerer:
 
     def _lower_struct(self, sd: StructDecl) -> LoweredStruct:
         ls = LoweredStruct(name=sd.name_token.spelling)
-        for field in sd.fields:
+        st = self.analyzer.get_struct(ls.name)
+        field_decls = st.fields if st else sd.fields
+        for field in field_decls:
             token_str = " ".join(t.spelling for t in field.tokens) if field.tokens else ""
             if token_str.strip():
                 first_token = field.tokens[0]
@@ -135,7 +137,8 @@ class Lowerer:
             ls = self.structs[struct_name]
             ls.has_vtable = True
 
-            base_name = info.base_name
+            st = self.analyzer.get_struct(struct_name)
+            base_name = st.base_name if st else None
             if base_name and base_name in self.structs:
                 if not self.structs[base_name].has_vtable:
                     self.structs[base_name].has_vtable = True
@@ -154,11 +157,11 @@ class Lowerer:
 
     def _inject_vptr_fields(self):
         for name, ls in self.structs.items():
-            info = self.analyzer.get_implementation(name)
-            if info is None:
+            st = self.analyzer.get_struct(name)
+            if st is None:
                 continue
-            if info.base_name and info.base_name in self.structs:
-                base_ls = self.structs[info.base_name]
+            if st.base_name and st.base_name in self.structs:
+                base_ls = self.structs[st.base_name]
                 if base_ls.has_vtable:
                     ls.has_vtable = True
 

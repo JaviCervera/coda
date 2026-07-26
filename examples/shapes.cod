@@ -29,13 +29,12 @@ impl Shape {
     }
 }
 
-struct Rectangle {
-    struct Shape base;
+struct Rectangle : Shape {
     double width;
     double height;
 };
 
-impl Rectangle : Shape {
+impl Rectangle {
     init(double width, double height) {
         self->base.init();
         self->width = width;

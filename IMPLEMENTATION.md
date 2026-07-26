@@ -170,13 +170,18 @@ At top level, recognize these Coda forms:
 #import "path.cod"
 
 template <Identifier (, Identifier)*>
-    struct-definition
+    struct-definition [: BaseName]
 
 template <Identifier (, Identifier)*>
     impl Name <TypeArg (, TypeArg)*> impl-body
 
-    impl [struct] Name [: BaseName] impl-body
+impl [struct] Name impl-body
+
+struct Identifier [: BaseName] { field* }
 ```
+
+A struct with `: BaseName` declares single inheritance. Coda injects
+`struct BaseName base;` as the first field during semantic registration.
 
 `struct-definition` uses normal C struct syntax. For a Coda-owned struct, retain
 the field declarations as a token-backed AST so generated layout can inject a
@@ -262,7 +267,9 @@ Validate all of the following before emission:
 - no default arguments;
 - an inheritance base exists, is Coda-owned, and is not final (there is no `final`
   keyword in 0.1, so this check is structurally reserved);
-- the declared base field is the first physical field and has the exact base type;
+- the base field (`struct BaseName base;`) is injected as the first field during
+  `_register_struct`; an explicit field named `base` in a struct that declares
+  `: BaseName` is rejected (`E020`);
 - overridden virtual methods repeat `virtual` and have an exact signature match;
 - a non-virtual method may not replace an inherited virtual method;
 - no field/method/virtual name conflict;

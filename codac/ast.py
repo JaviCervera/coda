@@ -42,6 +42,7 @@ class StructDecl:
     fields: list[FieldDecl]
     template_params: list[Token] = dataclasses.field(default_factory=list)
     is_forward: bool = False
+    base_name_token: Token | None = None
 
 
 @dataclasses.dataclass
@@ -62,7 +63,6 @@ class Implementation:
     struct_token: Token
     is_foreign_struct: bool
     name_tokens: list[Token]
-    base_name_tokens: list[Token]
     template_args: list[list[Token]]
     methods: list[Method]
 

@@ -128,7 +128,7 @@ class Specializer:
             ))
         return Implementation(
             struct_token=impl.struct_token, is_foreign_struct=impl.is_foreign_struct,
-            name_tokens=new_name_tokens, base_name_tokens=impl.base_name_tokens,
+            name_tokens=new_name_tokens,
             template_args=impl.template_args, methods=new_methods,
         )
 

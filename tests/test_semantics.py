@@ -69,8 +69,8 @@ class TestSemantics(unittest.TestCase):
         impl Entity {
             void tick(void) { }
         }
-        struct Sprite { struct Entity base; int x; };
-        impl Sprite : Entity {
+        struct Sprite : Entity { int x; };
+        impl Sprite {
             void render(void) { }
         }
         """

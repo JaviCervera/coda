@@ -67,8 +67,8 @@ class Emitter:
 
                 lines.append(f"struct {struct_name} {{\n")
                 if ls and ls.has_vtable:
-                    base_info = analyzer.get_implementation(struct_name)
-                    if base_info is None or not base_info.base_name:
+                    st = analyzer.get_struct(struct_name)
+                    if st is None or not st.base_name:
                         lines.append(f"    {VTABLE_PTR};\n")
                 for field in (ls.fields if ls else []):
                     ft = field.type_str.rstrip(";").strip()
@@ -213,25 +213,22 @@ class Emitter:
 
     def _vptr_path(self, struct_name: str) -> str:
         if self.analyzer:
-            impl = self.analyzer.get_implementation(struct_name)
-            if impl and impl.base_name:
-                st = self.analyzer.get_struct(struct_name)
-                if st and st.fields:
-                    first_field = st.fields[0]
-                    name_parts = [t.spelling for t in first_field.tokens if t.kind == "identifier"]
-                    if name_parts:
-                        field_name = name_parts[-1]
-                        return f"self->{field_name}.__coda_vptr"
+            st = self.analyzer.get_struct(struct_name)
+            if st and st.base_name and st.fields:
+                first_field = st.fields[0]
+                name_parts = [t.spelling for t in first_field.tokens if t.kind == "identifier"]
+                if name_parts:
+                    field_name = name_parts[-1]
+                    return f"self->{field_name}.__coda_vptr"
         return "self->__coda_vptr"
 
     def _get_vtable_types(self, module: Module, lowerer: Lowerer) -> set[str]:
         names: set[str] = set()
         for struct_name in lowerer.virtual_layout.vtable_types:
             names.add(struct_name)
-            base_info = None
-            for sname, info in lowerer.analyzer.implementations.items():
-                if sname == struct_name and info.base_name:
-                    names.add(info.base_name)
+            st = lowerer.analyzer.get_struct(struct_name)
+            if st and st.base_name:
+                names.add(st.base_name)
         return names
 
 

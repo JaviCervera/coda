@@ -154,6 +154,13 @@ class Parser:
             return TopLevelDecl(kind="preserved", token=struct_token, preserved_tokens=[struct_token])
 
         self.tokens.advance()
+        base_name_token: Token | None = None
+        if self.tokens.current and self.tokens.current.spelling == ":":
+            self.tokens.advance()
+            bt = self.tokens.current
+            if bt and bt.kind in ("identifier", "keyword"):
+                base_name_token = bt
+                self.tokens.advance()
         fields: list[FieldDecl] = []
 
         if self.tokens.current and self.tokens.current.spelling == "{":
@@ -185,11 +192,11 @@ class Parser:
         if self._is_coda_owned_struct(name_token.spelling):
             return TopLevelDecl(
                 kind="struct", token=struct_token,
-                body=StructDecl(name_token=name_token, fields=fields),
+                body=StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token),
             )
         return TopLevelDecl(
             kind="struct", token=struct_token,
-            body=StructDecl(name_token=name_token, fields=fields),
+            body=StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token),
             is_foreign=False,
         )
 
@@ -251,6 +258,13 @@ class Parser:
         if name_token is None or name_token.kind not in ("identifier", "keyword"):
             return None
         self.tokens.advance()
+        base_name_token: Token | None = None
+        if self.tokens.current and self.tokens.current.spelling == ":":
+            self.tokens.advance()
+            bt = self.tokens.current
+            if bt and bt.kind in ("identifier", "keyword"):
+                base_name_token = bt
+                self.tokens.advance()
         fields: list[FieldDecl] = []
         if self.tokens.current and self.tokens.current.spelling == "{":
             self.tokens.advance()
@@ -276,7 +290,7 @@ class Parser:
                 fields.append(FieldDecl(tokens=field_tokens))
             self.tokens.advance()
         self._skip_to_semicolon_if_present()
-        return StructDecl(name_token=name_token, fields=fields)
+        return StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token)
 
     def _parse_implementation(self) -> TopLevelDecl | None:
         token = self.tokens.advance()
@@ -288,7 +302,6 @@ class Parser:
     def _parse_implementation_body(self, token: Token | None = None) -> Implementation | None:
         is_foreign = False
         name_tokens: list[Token] = []
-        base_name_tokens: list[Token] = []
 
         if self.tokens.current and self.tokens.current.spelling == "struct":
             is_foreign = True
@@ -296,14 +309,6 @@ class Parser:
 
         while self.tokens.current:
             t = self.tokens.current
-            if t.spelling == ":" and not base_name_tokens:
-                self.tokens.advance()
-                while self.tokens.current:
-                    bt = self.tokens.current
-                    if bt.spelling in ("{", ";"):
-                        break
-                    base_name_tokens.append(self.tokens.advance())
-                continue
             if t.spelling in ("{", "<"):
                 break
             name_tokens.append(self.tokens.advance())
@@ -346,7 +351,7 @@ class Parser:
             token = name_tokens[0] if name_tokens else Token("impl", "", Span(self.path, 0, 1, 1))
         return Implementation(
             struct_token=token, is_foreign_struct=is_foreign,
-            name_tokens=name_tokens, base_name_tokens=base_name_tokens,
+            name_tokens=name_tokens,
             template_args=template_args, methods=methods,
         )
 

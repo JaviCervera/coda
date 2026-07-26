@@ -103,8 +103,8 @@ class TestRuntime(unittest.TestCase):
         impl Entity {
             void tick(void) { }
         }
-        struct Sprite { struct Entity base; int x; };
-        impl Sprite : Entity {
+        struct Sprite : Entity { int x; };
+        impl Sprite {
             void update(void) { }
         }
         """
@@ -118,8 +118,8 @@ class TestRuntime(unittest.TestCase):
                 self->id = 1;
             }
         }
-        struct Sprite { struct Entity base; int x; };
-        impl Sprite : Entity {
+        struct Sprite : Entity { int x; };
+        impl Sprite {
             virtual void update(void) {
                 self->x = 2;
             }
