@@ -546,12 +546,133 @@ behavior is needed.
 It has no semantics in 0.1 and an `interface Name { ... }` declaration is rejected
 with a diagnostic explaining that interfaces are not implemented yet.
 
+## Ownership and lifetime — known gaps
+
+Coda 0.1 provides automatic scope cleanup for stack-local variables of types
+with `deinit`, and return-transfer to move ownership out of a function. The
+following gaps are known and are intended to be addressed in future versions.
+
+### 1. Recursive field cleanup
+
+A container's `deinit` must manually call `deinit` on each embedded field
+that needs it. Coda does not auto-generate or verify this.
+
+```coda
+struct Buffer { struct String data; };
+impl Buffer {
+    deinit(void) {
+        // self->data.deinit();  // forgotten — leak or double-free
+    }
+}
+```
+
+0.1 compiles this without a diagnostic. A future version should either
+auto-generate the field deinit calls or require them and reject omissions.
+
+### 2. No copy control
+
+Copying a value whose type has `deinit` produces a bitwise copy, and both
+copies receive a `deinit` call at scope exit — a double-free.
+
+```coda
+void run(void) {
+    String a("hello");
+    String b = a;   // bitwise copy
+}                   // String_deinit(&b), then String_deinit(&a) — double-free
+```
+
+0.1 compiles this without a diagnostic. A future version should provide
+copy-constructor declarations, deleted copies (`@nopcopy`), or explicit
+clone/move operations.
+
+### 3. General move expressions
+
+`return var` transfers ownership correctly, but there is no general-purpose
+move expression for non-return contexts.
+
+```coda
+void consume(String s);
+
+void run(void) {
+    String s("hello");
+    consume(s);       // double-free: s deinit'd at scope exit,
+}                     // and consume deinit's its parameter
+```
+
+0.1 compiles this without a diagnostic. A future version should provide
+an explicit move expression (`s.move()` or similar) that zeroes the source
+and suppresses its deinit.
+
+### 4. No standard ownership types
+
+Templates, operator overloading, and init/deinit make it possible to build
+owning-pointer types yourself, but 0.1 ships no standard library with such
+helpers.
+
+```coda
+template <T>
+struct OwnedPtr { T *ptr; };
+
+template <T>
+impl OwnedPtr<T> {
+    init(T *p) { self->ptr = p; }
+    deinit(void) {
+        if (self->ptr) {
+            self->ptr->deinit();
+            free(self->ptr);
+        }
+    }
+    T *operator->(void) { return self->ptr; }
+    T *operator*(void) { return self->ptr; }
+}
+```
+
+Usage integrates with scope cleanup:
+
+```coda
+void run(void) {
+    OwnedPtr<String> p(malloc(sizeof(String)));
+    p->init("hello");
+}   // auto: OwnedPtr<String>_deinit(&p) → String_deinit + free
+```
+
+The remaining limitation is that bitwise copy (gap 2) applies to any such
+wrapper, and there is no move expression (gap 3) to transfer ownership out
+of one. A future version should ship a standard header with `Owned<T>`,
+`Arc<T>`, or similar.
+
+### 5. Array cleanup
+
+An array of a type with `deinit` does not trigger cleanup for its elements.
+
+```coda
+void run(void) {
+    String arr[2];    // two zero-initialized String values
+    arr[0].init("a");
+    arr[1].init("b");
+}                     // no deinit called — leak
+```
+
+0.1 compiles this without a diagnostic. A future version should call
+`deinit` on each element when the array goes out of scope, or reject
+arrays of deinit types outright until the feature is ready.
+
+### 6. Exception safety and panics
+
+Coda deliberately has no exceptions or stack unwinding. However, any
+future unwind mechanism (longjmp / panic / `setjmp`-based errors) must
+interact correctly with scope cleanup, or variables with `deinit` will
+leak on the unwinding path.
+
+0.1 does not address this. Any future unwind feature must be designed
+together with the cleanup infrastructure.
+
 ## Explicit non-features in 0.1
 
 ```text
 Exceptions and stack unwinding
 Garbage collection
-Implicit allocation, destruction, copy, or ownership transfer
+Implicit allocation or heap ownership transfer
 Interfaces and duck typing
 Pure virtual methods and abstract types
 Multiple inheritance
