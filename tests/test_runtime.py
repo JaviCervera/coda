@@ -131,6 +131,8 @@ class TestRuntime(unittest.TestCase):
         struct Sprite s;
         s.base.id = 0;
         s.x = 0;
+        (void)e;
+        (void)s;
         """)
 
 
