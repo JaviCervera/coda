@@ -36,6 +36,8 @@ class LoweredMethod:
         self.is_virtual = sig.is_virtual
         self.impl_name = impl_c_name(struct_name, sig.name)
         self.thunk_name: str | None = None
+        self.slot_name: str = sig.name
+
 
 
 class LoweredVTable:
@@ -98,11 +100,13 @@ class Lowerer:
             sig = info.methods.get(m.name_token.spelling)
             if sig is None:
                 sig = self._method_to_sig(m)
+            cname = method_c_name(struct_name, m.name_token.spelling)
             ls = LoweredMethod(
-                c_name=method_c_name(struct_name, m.name_token.spelling),
+                c_name=cname,
                 struct_name=struct_name,
                 sig=sig,
             )
+            ls.slot_name = cname.removeprefix(f"{struct_name}_")
             self.methods[struct_name].append(ls)
             if sig and sig.is_virtual:
                 self._register_virtual_slot(struct_name, sig, ls)
@@ -112,7 +116,7 @@ class Lowerer:
         if vt is None:
             vt = LoweredVTable(struct_name=struct_name)
             self.virtual_layout.vtable_types[struct_name] = vt
-        vt.slots.append((sig.name, ls.impl_name))
+        vt.slots.append((ls.slot_name, ls.impl_name))
 
     def _compute_virtual_layouts(self):
         for struct_name, info in self.analyzer.implementations.items():

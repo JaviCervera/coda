@@ -1,0 +1,67 @@
+struct Point {
+    int x;
+    int y;
+};
+
+implementation Point {
+    init(int x, int y) {
+        self->x = x;
+        self->y = y;
+    }
+
+    void move(int dx, int dy) {
+        self->x += dx;
+        self->y += dy;
+    }
+}
+
+struct Shape {
+    struct Point origin;
+};
+
+implementation Shape {
+    init(void) {
+        Point_init(&self->origin, 0, 0);
+    }
+
+    virtual double area(void) {
+        return 0.0;
+    }
+}
+
+struct Rectangle {
+    struct Shape base;
+    double width;
+    double height;
+};
+
+implementation Rectangle : Shape {
+    init(double width, double height) {
+        Shape_init(&self->base);
+        self->width = width;
+        self->height = height;
+    }
+
+    virtual double area(void) {
+        return self->width * self->height;
+    }
+}
+
+struct Vec2 {
+    int x;
+    int y;
+};
+
+implementation Vec2 {
+    init(int x, int y) {
+        self->x = x;
+        self->y = y;
+    }
+
+    struct Vec2 operator+(struct Vec2 rhs) {
+        struct Vec2 result;
+        result.x = self->x + rhs.x;
+        result.y = self->y + rhs.y;
+        return result;
+    }
+}

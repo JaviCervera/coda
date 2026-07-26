@@ -71,7 +71,9 @@ class Emitter:
                     if base_info is None or not base_info.base_name:
                         lines.append(f"    {VTABLE_PTR};\n")
                 for field in (ls.fields if ls else []):
-                    lines.append(f"    {field.type_str}\n")
+                    ft = field.type_str.rstrip(";").strip()
+                    if ft:
+                        lines.append(f"    {ft};\n")
                 lines.append("};\n\n")
 
         for struct_name in sorted(self._get_vtable_types(module, lowerer)):
@@ -79,8 +81,8 @@ class Emitter:
             vt = lowerer.virtual_layout.vtable_types.get(struct_name)
             if vt:
                 for mname, _ in vt.slots:
-                    impl = impl_c_name(struct_name, mname)
-                    lines.append(f"    void (*{mname})(struct {struct_name} *);\n")
+                    result_type = self._get_virtual_result_type(struct_name, mname)
+                    lines.append(f"    {result_type} (*{mname})(struct {struct_name} *);\n")
             lines.append("};\n\n")
 
         for struct_name, methods in lowerer.methods.items():
@@ -99,6 +101,20 @@ class Emitter:
                 for t in decl.preserved_tokens:
                     lines.append(t.spelling)
                 lines.append("\n")
+
+        for struct_name, methods in lowerer.methods.items():
+            for lm in methods:
+                params = self._format_params(lm, struct_name)
+                lines.append(f"{lm.sig.result_type} {lm.impl_name}({params});\n")
+        lines.append("\n")
+
+        for struct_name in sorted(self._get_vtable_types(module, lowerer)):
+            vt = lowerer.virtual_layout.vtable_types.get(struct_name)
+            if vt:
+                lines.append(f"const struct {vtable_type_name(struct_name)} {vtable_instance_name(struct_name)} = {{\n")
+                for mname, impl in vt.slots:
+                    lines.append(f"    .{mname} = {impl},\n")
+                lines.append("};\n\n")
 
         for struct_name, methods in lowerer.methods.items():
             for lm in methods:
@@ -122,7 +138,7 @@ class Emitter:
                     vt = vtable_type_name(struct_name)
                     vptr = self._vptr_path(struct_name)
                     lines.append(f"    const struct {vt} *vt = (const struct {vt} *){vptr};\n")
-                    lines.append(f"    return vt->{lm.sig.name}(self);\n")
+                    lines.append(f"    return vt->{lm.slot_name}(self);\n")
                     lines.append("}\n\n")
 
             for lm in methods:
@@ -145,6 +161,10 @@ class Emitter:
                             if parts:
                                 arg_names.append(parts[-1])
                         lines.append(f"    return {lm.impl_name}({', '.join(arg_names)});\n")
+                    ls = lowerer.structs.get(struct_name)
+                    if lm.sig.is_init and ls and ls.has_vtable:
+                        vptr = self._vptr_path(struct_name)
+                        lines.append(f"    {vptr} = &{vtable_instance_name(struct_name)};\n")
                     lines.append("}\n\n")
 
         for thunk_name, struct_name, mname, base_name in lowerer.virtual_layout.thunks:
@@ -153,13 +173,15 @@ class Emitter:
             lines.append(f"    {impl_c_name(struct_name, mname)}((struct {struct_name} *)base);\n")
             lines.append("}\n\n")
 
-        for struct_name in sorted(self._get_vtable_types(module, lowerer)):
-            lines.append(f"const struct {vtable_type_name(struct_name)} {vtable_instance_name(struct_name)} = {{\n")
-            vt = lowerer.virtual_layout.vtable_types.get(struct_name)
-            if vt:
-                for mname, impl in vt.slots:
-                    lines.append(f"    .{mname} = {impl},\n")
-            lines.append("};\n\n")
+    def _get_virtual_result_type(self, struct_name: str, slot_name: str) -> str:
+        if self.analyzer:
+            impl_info = self.analyzer.get_implementation(struct_name)
+            if impl_info:
+                for mname, msig in impl_info.methods.items():
+                    expected = method_c_name("", mname).removeprefix("_")
+                    if expected == slot_name:
+                        return msig.result_type
+        return "void"
 
     def _format_params(self, lm: LoweredMethod, struct_name: str) -> str:
         parts = [f"struct {struct_name} *self"]

@@ -65,7 +65,8 @@ def method_c_name(struct_name: str, method_name: str) -> str:
 
 
 def impl_c_name(struct_name: str, method_name: str) -> str:
-    return f"coda_{struct_name}_{method_name}_impl"
+    safe_name = method_c_name(struct_name, method_name).removeprefix(f"{struct_name}_")
+    return f"coda_{struct_name}_{safe_name}_impl"
 
 
 def thunk_c_name(struct_name: str, method_name: str, base_name: str) -> str:

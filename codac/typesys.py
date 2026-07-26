@@ -126,7 +126,7 @@ class SemanticAnalyzer:
             name = f"operator{m.operator_token}"
         result_type = None
         if not m.is_init and not m.is_deinit:
-            result_type = "".join(t.spelling for t in m.return_type_tokens) or "void"
+            result_type = " ".join(t.spelling for t in m.return_type_tokens) or "void"
         else:
             result_type = "void"
         param_types = tuple(
