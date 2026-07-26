@@ -21,7 +21,7 @@ struct Shape {
 
 implementation Shape {
     init(void) {
-        Point_init(&self->origin, 0, 0);
+        self->origin.init(0, 0);
     }
 
     virtual double area(void) {
@@ -37,7 +37,7 @@ struct Rectangle {
 
 implementation Rectangle : Shape {
     init(double width, double height) {
-        Shape_init(&self->base);
+        self->base.init();
         self->width = width;
         self->height = height;
     }

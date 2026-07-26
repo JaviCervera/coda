@@ -3,6 +3,7 @@ from __future__ import annotations
 from codac.ast import (
     Expr, Implementation, Method, Module, StructDecl, Token, TopLevelDecl,
 )
+from codac.expr import lower_method_body
 from codac.names import (
     impl_c_name, method_c_name, thunk_c_name, vtable_instance_name, vtable_type_name,
 )
@@ -37,6 +38,7 @@ class LoweredMethod:
         self.impl_name = impl_c_name(struct_name, sig.name)
         self.thunk_name: str | None = None
         self.slot_name: str = sig.name
+        self.lowered_body: str | None = None
 
 
 
@@ -107,6 +109,8 @@ class Lowerer:
                 sig=sig,
             )
             ls.slot_name = cname.removeprefix(f"{struct_name}_")
+            if m.body_tokens:
+                ls.lowered_body = lower_method_body(m.body_tokens, struct_name, self.analyzer)
             self.methods[struct_name].append(ls)
             if sig and sig.is_virtual:
                 self._register_virtual_slot(struct_name, sig, ls)

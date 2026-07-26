@@ -62,7 +62,7 @@ struct Shape {
 
 implementation Shape {
     init(void) {
-        Point_init(&self->origin, 0, 0);
+        self->origin.init(0, 0);
     }
 
     virtual double area(void) {
@@ -78,7 +78,7 @@ struct Rectangle {
 
 implementation Rectangle : Shape {
     init(double width, double height) {
-        Shape_init(&self->base);
+        self->base.init();
         self->width = width;
         self->height = height;
     }
@@ -159,6 +159,12 @@ const struct Shape_vtable coda_Shape_vtable = {
     .area = coda_Shape_area_impl,
 };
 
+/* lowered method call — self->origin.init(0,0) becomes Point_init(&self->origin, 0, 0) */
+void coda_Shape_init_impl(struct Shape *self){
+    (void)self;
+    Point_init(&self->origin, 0, 0);
+}
+
 /* virtual dispatcher — reads vptr and dispatches */
 double Shape_area(struct Shape *self){
     (void)self;
@@ -166,14 +172,12 @@ double Shape_area(struct Shape *self){
     return vt->area(self);
 }
 
-/* vptr is wired in init */
+/* vptr wired in init after base init */
 void Rectangle_init(struct Rectangle *self, double width, double height){
     (void)self;
- {
-        Shape_init(&self->base);
-        self->width = width;
-        self->height = height;
-    }
+    Shape_init(&self->base);
+    self->width = width;
+    self->height = height;
     self->base.__coda_vptr = &coda_Rectangle_vtable;
 }
 ```
@@ -233,3 +237,32 @@ python -m pytest tests/ -v
 
 Tests cover lexing, parsing, semantic analysis, code emission (golden-file
 comparisons), and runtime (compile + run generated C with a host compiler).
+
+## Implementation status
+
+Pipeline phases from [`IMPLEMENTATION.md`](IMPLEMENTATION.md):
+
+| Phase | Status |
+|---|---|
+| Lossless lexing | ✅ |
+| Import scan & module graph | ✅ |
+| Structural parse | ✅ |
+| Semantic collection & type resolution | ✅ |
+| Template-instantiation discovery | ❌ not wired |
+| Object-model layout & virtual-slot calculation | ✅ |
+| Expression lowering (method calls) | ✅ |
+| Operator lowering | ❌ not implemented |
+| Deterministic C emission | ✅ |
+| Stable error-code diagnostics | ❌ not implemented |
+| CLI (`--out-dir`, `-I`, `--emit-deps`) | ✅ |
+
+Acceptance criteria:
+
+| Criterion | Status |
+|---|---|
+| All tests pass | ⚠️ 59 pass; operator/template/error tests not yet written |
+| No Coda syntax in generated C | ✅ |
+| Representative fixtures compile with host C89 | ✅ |
+| z88dk integration | ❌ not tested |
+| Stable diagnostics for every semantic rule | ❌ |
+| Deterministic output | ✅ |

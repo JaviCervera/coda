@@ -192,6 +192,8 @@ class Emitter:
         return ", ".join(parts) if parts else "void"
 
     def _get_body_text(self, struct_name: str, lm: LoweredMethod) -> str:
+        if lm.lowered_body is not None:
+            return lm.lowered_body
         body_tokens: list = []
         if lm.sig.ast and lm.sig.ast.body_tokens:
             body_tokens = lm.sig.ast.body_tokens
