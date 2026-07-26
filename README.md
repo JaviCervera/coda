@@ -10,14 +10,14 @@ compiler architecture and lowering strategy are documented in
 
 ## Features
 
-- **Struct methods** — `implementation Point { void move(...) { ... } }`
+- **Struct methods** — `impl Point { void move(...) { ... } }`
 - **Construction / destruction** — explicit `init` / `deinit` (never implicit)
 - **Single inheritance** — `struct Rectangle { struct Shape base; ... };`
-  with an `implementation Rectangle : Shape { ... }`
+  with an `impl Rectangle : Shape { ... }`
 - **Virtual dispatch** — `virtual double area(void);` + override in derived
 - **Operator overloading** — `struct Vec2 operator+(struct Vec2 rhs) { ... }`
 - **Templates** — `template<T> struct Array { ... }`
-- **Foreign struct extensions** — extra methods on C types via `foreign implementation`
+- **Foreign struct extensions** — extra methods on C types via `foreign impl`
 - **Imports** — modular compilation across `.cod` files
 - **Lossless lexer + structural parser** — preserves `#include`, `typedef`,
   `union`, `enum` and trivia for round-tripping
@@ -44,7 +44,7 @@ struct Point {
     int y;
 };
 
-implementation Point {
+impl Point {
     init(int x, int y) {
         self->x = x;
         self->y = y;
@@ -60,7 +60,7 @@ struct Shape {
     struct Point origin;
 };
 
-implementation Shape {
+impl Shape {
     init(void) {
         self->origin.init(0, 0);
     }
@@ -76,7 +76,7 @@ struct Rectangle {
     double height;
 };
 
-implementation Rectangle : Shape {
+impl Rectangle : Shape {
     init(double width, double height) {
         self->base.init();
         self->width = width;
@@ -93,7 +93,7 @@ struct Vec2 {
     int y;
 };
 
-implementation Vec2 {
+impl Vec2 {
     init(int x, int y) {
         self->x = x;
         self->y = y;

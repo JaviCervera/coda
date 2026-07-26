@@ -40,7 +40,7 @@ class TestParser(unittest.TestCase):
     def test_implementation(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) {
                 self->x += dx;
                 self->y += dy;
@@ -48,13 +48,13 @@ class TestParser(unittest.TestCase):
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         self.assertGreaterEqual(len(impls), 1)
 
     def test_implementation_with_init(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             init(int x, int y) {
                 self->x = x;
                 self->y = y;
@@ -62,7 +62,7 @@ class TestParser(unittest.TestCase):
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         self.assertGreaterEqual(len(impls), 1)
         impl = impls[0].body
         self.assertIsNotNone(impl)
@@ -72,12 +72,12 @@ class TestParser(unittest.TestCase):
     def test_implementation_with_deinit(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             deinit(void) { }
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         self.assertGreaterEqual(len(impls), 1)
         impl = impls[0].body
         self.assertTrue(impl.methods[0].is_deinit)
@@ -85,19 +85,19 @@ class TestParser(unittest.TestCase):
     def test_virtual_method(self):
         source = """
         struct Entity { int id; };
-        implementation Entity {
+        impl Entity {
             virtual void update(void) { }
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         impl = impls[0].body
         self.assertTrue(impl.methods[0].is_virtual)
 
     def test_inheritance(self):
         source = """
         struct Sprite { struct Entity base; int x; };
-        implementation Sprite : Entity {
+        impl Sprite : Entity {
             init(int id, int x, int y) {
                 self->base.init(id);
                 self->x = x;
@@ -105,7 +105,7 @@ class TestParser(unittest.TestCase):
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         self.assertGreaterEqual(len(impls), 1)
         impl = impls[0].body
         self.assertGreater(len(impl.base_name_tokens), 0)
@@ -146,7 +146,7 @@ class TestParser(unittest.TestCase):
     def test_operator_method(self):
         source = """
         struct Fix16 { int32_t raw; };
-        implementation Fix16 {
+        impl Fix16 {
             struct Fix16 operator+(struct Fix16 rhs) {
                 struct Fix16 result;
                 result.raw = self->raw + rhs.raw;
@@ -155,21 +155,21 @@ class TestParser(unittest.TestCase):
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         self.assertGreaterEqual(len(impls), 1)
         impl = impls[0].body
         self.assertTrue(impl.methods[0].is_operator)
 
     def test_foreign_implementation(self):
         source = """
-        implementation struct LegacyFile {
+        impl struct LegacyFile {
             int remaining(void) {
                 return self->size - self->position;
             }
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         self.assertGreaterEqual(len(impls), 1)
         impl = impls[0].body
         self.assertTrue(impl.is_foreign_struct)
@@ -192,20 +192,20 @@ class TestParser(unittest.TestCase):
     def test_multiple_methods(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) { }
             int dist(void) { return 0; }
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         impl = impls[0].body
         self.assertEqual(len(impl.methods), 2)
 
     def test_method_with_body(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void reset(void) {
                 self->x = 0;
                 self->y = 0;
@@ -213,7 +213,7 @@ class TestParser(unittest.TestCase):
         }
         """
         module = self.parse(source)
-        impls = [d for d in module.top_level if d.kind == "implementation"]
+        impls = [d for d in module.top_level if d.kind == "impl"]
         impl = impls[0].body
         self.assertGreater(len(impl.methods[0].body_tokens), 0)
 

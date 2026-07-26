@@ -68,7 +68,7 @@ class Lowerer:
                 lowered_struct = self._lower_struct(decl.body)
                 self.structs[decl.body.name_token.spelling] = lowered_struct
                 lowered.append(decl)
-            elif decl.kind == "implementation" and decl.body:
+            elif decl.kind == "impl" and decl.body:
                 self._lower_implementation(decl.body)
                 lowered.append(decl)
             elif decl.kind in ("include", "import", "preserved"):

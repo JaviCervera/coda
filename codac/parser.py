@@ -108,7 +108,7 @@ class Parser:
         if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "template":
             return self._parse_template()
 
-        if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "implementation":
+        if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "impl":
             return self._parse_implementation()
 
         if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "struct":
@@ -200,7 +200,7 @@ class Parser:
             if t.kind == "directive" and t.spelling.startswith("#import"):
                 i += 1
                 continue
-            if t.kind == "keyword" and t.spelling == "implementation":
+            if t.kind == "keyword" and t.spelling == "impl":
                 peek = i + 1
                 if peek < len(self.tokens.tokens):
                     n = self.tokens.tokens[peek]
@@ -234,13 +234,13 @@ class Parser:
                 struct_decl.template_params = params
             return TopLevelDecl(kind="template", token=params[0] if params else Token("template", "", Span(self.path, 0, 1, 1)), body=TemplateDecl(params=params, body=struct_decl))
 
-        if self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "implementation":
+        if self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "impl":
             impl = self._parse_implementation_body()
             if impl:
                 impl.template_args = [[p] for p in params]
             return TopLevelDecl(kind="template", token=params[0] if params else Token("template", "", Span(self.path, 0, 1, 1)), body=TemplateDecl(params=params, body=impl))
 
-        self.errors.append("template must be followed by struct or implementation")
+        self.errors.append("template must be followed by struct or impl")
         return TopLevelDecl(kind="preserved", token=params[0] if params else Token("template", "", Span(self.path, 0, 1, 1)), preserved_tokens=[])
 
     def _parse_struct_decl(self) -> StructDecl | None:
@@ -283,7 +283,7 @@ class Parser:
         impl = self._parse_implementation_body(token)
         if impl is None:
             return None
-        return TopLevelDecl(kind="implementation", token=token, body=impl)
+        return TopLevelDecl(kind="impl", token=token, body=impl)
 
     def _parse_implementation_body(self, token: Token | None = None) -> Implementation | None:
         is_foreign = False
@@ -343,7 +343,7 @@ class Parser:
 
         methods = self._parse_method_list()
         if token is None:
-            token = name_tokens[0] if name_tokens else Token("implementation", "", Span(self.path, 0, 1, 1))
+            token = name_tokens[0] if name_tokens else Token("impl", "", Span(self.path, 0, 1, 1))
         return Implementation(
             struct_token=token, is_foreign_struct=is_foreign,
             name_tokens=name_tokens, base_name_tokens=base_name_tokens,

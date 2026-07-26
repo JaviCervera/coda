@@ -72,7 +72,7 @@ class SemanticAnalyzer:
     def _analyze_decl(self, decl: TopLevelDecl, module_path: str):
         if decl.kind == "struct" and decl.body:
             self._register_struct(decl.body, module_path)
-        elif decl.kind == "implementation" and decl.body:
+        elif decl.kind == "impl" and decl.body:
             self._register_implementation(decl.body, module_path)
         elif decl.kind == "template" and decl.body:
             if isinstance(decl.body.body, StructDecl):

@@ -52,7 +52,7 @@ class TestEmit(unittest.TestCase):
     def test_method_declaration(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) {
                 self->x += dx;
                 self->y += dy;
@@ -66,7 +66,7 @@ class TestEmit(unittest.TestCase):
     def test_method_implementation(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) { }
         }
         """
@@ -77,7 +77,7 @@ class TestEmit(unittest.TestCase):
     def test_init_generated(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             init(int x, int y) { }
         }
         """
@@ -87,7 +87,7 @@ class TestEmit(unittest.TestCase):
     def test_virtual_dispatcher(self):
         source = """
         struct Entity { int id; };
-        implementation Entity {
+        impl Entity {
             virtual void update(void) { }
         }
         """
@@ -99,13 +99,14 @@ class TestEmit(unittest.TestCase):
     def test_no_coda_syntax_in_output(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) { }
         }
         """
         h, c = self.emit_source(source)
-        self.assertNotIn("implementation", h)
-        self.assertNotIn("implementation", c)
+        import re
+        self.assertFalse(re.search(r'\bimpl\b', h), f"'impl' found in header:\n{h}")
+        self.assertFalse(re.search(r'\bimpl\b', c), f"'impl' found in source:\n{c}")
         self.assertNotIn("#import", h)
         self.assertNotIn("#import", c)
 
@@ -116,7 +117,7 @@ class TestEmit(unittest.TestCase):
     def test_deterministic_output(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) { }
             int get_x(void) { return self->x; }
         }

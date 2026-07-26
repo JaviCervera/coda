@@ -3,7 +3,7 @@ struct Point {
     int y;
 };
 
-implementation Point {
+impl Point {
     init(int x, int y) {
         self->x = x;
         self->y = y;
@@ -19,7 +19,7 @@ struct Shape {
     struct Point origin;
 };
 
-implementation Shape {
+impl Shape {
     init(void) {
         self->origin.init(0, 0);
     }
@@ -35,7 +35,7 @@ struct Rectangle {
     double height;
 };
 
-implementation Rectangle : Shape {
+impl Rectangle : Shape {
     init(double width, double height) {
         self->base.init();
         self->width = width;
@@ -52,7 +52,7 @@ struct Vec2 {
     int y;
 };
 
-implementation Vec2 {
+impl Vec2 {
     init(int x, int y) {
         self->x = x;
         self->y = y;

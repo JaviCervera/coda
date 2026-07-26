@@ -13,7 +13,7 @@ KEYWORDS = frozenset({
 })
 
 CODA_KEYWORDS = frozenset({
-    "implementation", "virtual", "template", "operator", "interface",
+    "impl", "virtual", "template", "operator", "interface",
 })
 
 ALL_KEYWORDS = KEYWORDS | CODA_KEYWORDS

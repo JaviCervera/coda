@@ -21,7 +21,7 @@ class TestSemantics(unittest.TestCase):
     def test_implementation_registered(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) { }
         }
         """
@@ -33,7 +33,7 @@ class TestSemantics(unittest.TestCase):
     def test_init_method(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             init(int x, int y) { }
         }
         """
@@ -44,7 +44,7 @@ class TestSemantics(unittest.TestCase):
     def test_deinit_method(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             deinit(void) { }
         }
         """
@@ -55,7 +55,7 @@ class TestSemantics(unittest.TestCase):
     def test_virtual_method_registered(self):
         source = """
         struct Entity { int id; };
-        implementation Entity {
+        impl Entity {
             virtual void update(void) { }
         }
         """
@@ -66,11 +66,11 @@ class TestSemantics(unittest.TestCase):
     def test_inheritance_chain(self):
         source = """
         struct Entity { int id; };
-        implementation Entity {
+        impl Entity {
             void tick(void) { }
         }
         struct Sprite { struct Entity base; int x; };
-        implementation Sprite : Entity {
+        impl Sprite : Entity {
             void render(void) { }
         }
         """
@@ -82,7 +82,7 @@ class TestSemantics(unittest.TestCase):
     def test_operator_detected(self):
         source = """
         struct Fix16 { int32_t raw; };
-        implementation Fix16 {
+        impl Fix16 {
             struct Fix16 operator+(struct Fix16 rhs) { return *self; }
         }
         """

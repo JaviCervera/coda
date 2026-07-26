@@ -173,19 +173,19 @@ template <Identifier (, Identifier)*>
     struct-definition
 
 template <Identifier (, Identifier)*>
-    implementation Name <TypeArg (, TypeArg)*> implementation-body
+    impl Name <TypeArg (, TypeArg)*> impl-body
 
-implementation [struct] Name [: BaseName] implementation-body
+    impl [struct] Name [: BaseName] impl-body
 ```
 
 `struct-definition` uses normal C struct syntax. For a Coda-owned struct, retain
 the field declarations as a token-backed AST so generated layout can inject a
 vtable pointer when required.
 
-An `implementation` body contains only method definitions. Its grammar is:
+An `impl` body contains only method definitions. Its grammar is:
 
 ```text
-implementation-body  := '{' method* '}'
+impl-body  := '{' method* '}'
 method               := ['virtual'] method-head compound-statement
 method-head          := type identifier '(' parameter-list ')'
                       | 'init' '(' parameter-list ')'
@@ -518,7 +518,7 @@ Use `#line` directives before re-emitted user method bodies and preserved C
 regions. Diagnostics produced by the target C compiler should therefore refer to
 the original `.cod` source as often as possible.
 
-Never emit a Coda-only token (`implementation`, `virtual`, template angle-bracket
+Never emit a Coda-only token (`impl`, `virtual`, template angle-bracket
 types, `#import`, or `operator` declarations) into generated C.
 
 ## 12. Diagnostics
@@ -529,9 +529,9 @@ Diagnostics must have stable error codes for tests and tooling. Suggested codes:
 E001 malformed import
 E002 import not found
 E003 conditional import unsupported
-E010 malformed implementation
-E011 unknown implementation target
-E012 duplicate implementation
+E010 malformed impl
+E011 unknown impl target
+E012 duplicate impl
 E013 invalid init/deinit signature
 E014 duplicate or colliding method name
 E020 invalid inheritance layout
@@ -575,7 +575,7 @@ for AST/semantic snapshots when parser failures need focused tests.
 
 ### 13.1 Lexer tests
 
-- identifiers `implementation`, `virtual`, `template`, `operator`, and `interface`
+- identifiers `impl`, `virtual`, `template`, `operator`, and `interface`
   in comments, strings, character literals, and ordinary C identifiers;
 - every C punctuator, especially longest-match operators;
 - escaped strings and escaped physical newlines;

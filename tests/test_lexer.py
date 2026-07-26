@@ -25,7 +25,7 @@ class TestLexer(unittest.TestCase):
             self.assertEqual(t.kind, "keyword")
 
     def test_coda_keywords(self):
-        sf = self.lex("implementation virtual template operator interface")
+        sf = self.lex("impl virtual template operator interface")
         for t in sf.tokens:
             self.assertEqual(t.kind, "keyword")
 
@@ -92,7 +92,7 @@ class TestLexer(unittest.TestCase):
         self.assertIn('"point.cod"', sf.tokens[0].spelling)
 
     def test_coda_keywords_in_comments(self):
-        sf = self.lex("// implementation\nint x;")
+        sf = self.lex("// impl\nint x;")
         self.assertEqual(len(sf.tokens), 3)
         self.assertEqual(sf.tokens[0].spelling, "int")
         self.assertEqual(sf.tokens[1].spelling, "x")

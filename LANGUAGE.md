@@ -52,7 +52,7 @@ struct B { struct A *a; };
 ## Structs
 
 A Coda object begins as an ordinary C struct. A struct with no Coda
-`implementation` remains an ordinary C struct.
+`impl` remains an ordinary C struct.
 
 ```coda
 struct Point {
@@ -66,7 +66,7 @@ allocation.
 
 ## Implementations and instance methods
 
-An `implementation` block attaches methods to a struct.
+An `impl` block attaches methods to a struct.
 
 ```coda
 struct Point {
@@ -74,7 +74,7 @@ struct Point {
     int y;
 };
 
-implementation Point {
+impl Point {
     void move(int dx, int dy) {
         self->x += dx;
         self->y += dy;
@@ -135,7 +135,7 @@ Point_move(&p, 2, -1);
 `init` and `deinit` are special method names.
 
 ```coda
-implementation Point {
+impl Point {
     init(int x, int y) {
         self->x = x;
         self->y = y;
@@ -187,7 +187,7 @@ struct Entity {
     int id;
 };
 
-implementation Entity {
+impl Entity {
     init(int id) {
         self->id = id;
     }
@@ -199,7 +199,7 @@ struct Sprite {
     int y;
 };
 
-implementation Sprite : Entity {
+impl Sprite : Entity {
     init(int id, int x, int y) {
         self->base.init(id);
         self->x = x;
@@ -208,7 +208,7 @@ implementation Sprite : Entity {
 }
 ```
 
-`implementation Sprite : Entity` declares that `Sprite` derives from `Entity`.
+`impl Sprite : Entity` declares that `Sprite` derives from `Entity`.
 Coda verifies that `struct Entity base;` is the first field. There is no multiple
 inheritance, mixin system, or implicit base-constructor call.
 
@@ -222,7 +222,7 @@ struct Entity {
     int id;
 };
 
-implementation Entity {
+impl Entity {
     virtual void update(void) {
         /* default behavior */
     }
@@ -233,7 +233,7 @@ struct Sprite {
     int x;
 };
 
-implementation Sprite : Entity {
+impl Sprite : Entity {
     virtual void update(void) {
         self->x++;
     }
@@ -272,7 +272,7 @@ struct Array {
 };
 
 template <T>
-implementation Array<T> {
+impl Array<T> {
     init(T *storage, unsigned capacity) {
         self->data = storage;
         self->count = 0;
@@ -337,7 +337,7 @@ struct Fix16 {
     int32_t raw;
 };
 
-implementation Fix16 {
+impl Fix16 {
     struct Fix16 operator+(struct Fix16 rhs) {
         struct Fix16 result;
         result.raw = self->raw + rhs.raw;
@@ -394,7 +394,7 @@ struct OwnedPtr {
 };
 
 template <T>
-implementation OwnedPtr<T> {
+impl OwnedPtr<T> {
     T *operator->(void) {
         return self->ptr;
     }
@@ -435,7 +435,7 @@ Coda may add non-virtual methods to a tagged struct defined by a C header:
 ```coda
 #include "legacy_file.h"
 
-implementation struct LegacyFile {
+impl struct LegacyFile {
     int remaining(void) {
         return self->size - self->position;
     }

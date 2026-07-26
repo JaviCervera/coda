@@ -67,7 +67,7 @@ class TestRuntime(unittest.TestCase):
     def test_method_call_compiles(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             void move(int dx, int dy) {
                 self->x += dx;
                 self->y += dy;
@@ -79,7 +79,7 @@ class TestRuntime(unittest.TestCase):
     def test_init_compiles(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             init(int x, int y) {
                 self->x = x;
                 self->y = y;
@@ -91,7 +91,7 @@ class TestRuntime(unittest.TestCase):
     def test_deinit_compiles(self):
         source = """
         struct Point { int x; int y; };
-        implementation Point {
+        impl Point {
             deinit(void) { }
         }
         """
@@ -100,11 +100,11 @@ class TestRuntime(unittest.TestCase):
     def test_inheritance_compiles(self):
         source = """
         struct Entity { int id; };
-        implementation Entity {
+        impl Entity {
             void tick(void) { }
         }
         struct Sprite { struct Entity base; int x; };
-        implementation Sprite : Entity {
+        impl Sprite : Entity {
             void update(void) { }
         }
         """
@@ -113,13 +113,13 @@ class TestRuntime(unittest.TestCase):
     def test_virtual_compiles(self):
         source = """
         struct Entity { int id; };
-        implementation Entity {
+        impl Entity {
             virtual void update(void) {
                 self->id = 1;
             }
         }
         struct Sprite { struct Entity base; int x; };
-        implementation Sprite : Entity {
+        impl Sprite : Entity {
             virtual void update(void) {
                 self->x = 2;
             }
