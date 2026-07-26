@@ -87,6 +87,10 @@ class Stmt:
     tokens: list[Token]
     children: list[Stmt] = dataclasses.field(default_factory=list)
     expr: Optional[Expr] = None
+    var_name: str | None = None
+    var_type: str | None = None
+    has_init_call: bool = False
+    var_init_arg_tokens: list[Token] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass

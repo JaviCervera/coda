@@ -191,3 +191,12 @@ class SemanticAnalyzer:
 
     def get_implementation(self, name: str) -> ImplementationInfo | None:
         return self.implementations.get(name)
+
+    def has_deinit(self, type_name: str) -> bool:
+        impl = self.implementations.get(type_name)
+        if impl is not None and "deinit" in impl.methods:
+            return True
+        st = self.structs.get(type_name)
+        if st is not None and st.base_name:
+            return self.has_deinit(st.base_name)
+        return False

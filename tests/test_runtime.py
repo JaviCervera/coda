@@ -110,6 +110,51 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile(source)
 
+    def test_auto_deinit_compiles(self):
+        source = """
+        struct String { const char *data; };
+        impl String {
+            init(const char *str) { self->data = str; }
+            deinit(void) { }
+        }
+        struct Test { int dummy; };
+        impl Test {
+            void run(void) {
+                String s("hello");
+            }
+        }
+        """
+        self._compile(source)
+
+    def test_auto_deinit_counter(self):
+        source = """
+        extern void inc_count(void);
+        extern void dec_count(void);
+        struct String { const char *data; };
+        impl String {
+            init(const char *str) { inc_count(); self->data = str; }
+            deinit(void) { dec_count(); }
+        }
+        struct Test { int dummy; };
+        impl Test {
+            void run(void) {
+                String s("hello");
+            }
+        }
+        """
+        c_helpers = """
+        static int cleanup_counter = 0;
+        void inc_count(void) { cleanup_counter++; }
+        void dec_count(void) { cleanup_counter++; }
+        int get_count(void) { return cleanup_counter; }
+        """
+        test_main = """
+        struct Test test;
+        Test_run(&test);
+        if (get_count() != 0) return 1;
+        """
+        self._compile_and_run(source, c_helpers, test_main)
+
     def test_virtual_compiles(self):
         source = """
         struct Entity { int id; };

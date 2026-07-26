@@ -147,8 +147,12 @@ impl Point {
 }
 ```
 
-They generate `Point_init()` and `Point_deinit()` functions. Coda never allocates
-storage or invokes either method implicitly:
+They generate `Point_init()` and `Point_deinit()` functions.
+
+### Explicit lifetime model (default)
+
+In the default model, Coda never allocates storage or invokes either method
+implicitly:
 
 ```coda
 struct Point p;
@@ -171,9 +175,99 @@ if (p != 0) {
 }
 ```
 
-An implementation may also provide ordinary factory functions. Coda may generate
-a by-value `Type_make(...)` helper from `init`, but this is convenience syntax,
-not allocation or RAII.
+### Automatic scope cleanup (init-declaration syntax)
+
+When a struct has a `deinit` method, you may declare a stack-local variable
+using init-declaration syntax. Coda automatically calls `deinit` when the
+variable goes out of scope.
+
+```coda
+struct String { char *data; };
+impl String {
+    init(const char *str) { self->data = str; }
+    deinit(void) { /* release data */ }
+}
+
+impl Example {
+    void run(void) {
+        String s("hello");         // init-declaration: calls String_init(&s, "hello")
+        /* use s */
+    }                              // auto: String_deinit(&s)
+}
+```
+
+A variable declared with init-declaration syntax must be of a type that has a
+`deinit` method. Calling `deinit` explicitly on such a variable is rejected
+(E070) to prevent double-free.
+
+```coda
+void run(void) {
+    String s("hello");
+    s.deinit();                    // ERROR (E070)
+}
+```
+
+If a type has `deinit` but no `init`, the variable is zero-initialized
+(`= {0}`) instead of calling init:
+
+```coda
+impl String {
+    deinit(void) { }
+}
+
+void run(void) {
+    String s;                      // zero-init: String s = {0}
+}                                  // auto: String_deinit(&s)
+```
+
+Auto-cleanup applies only to stack-local variables. Static, embedded (field),
+and dynamically allocated objects remain explicit.
+
+**Embedded fields:** A container struct's `deinit` must explicitly call
+`deinit` on each embedded field that requires cleanup. Coda does not
+recursively walk struct fields to inject cleanup — the programmer always
+retains control over field lifetime.
+
+```coda
+struct Buffer { struct String data; };
+impl Buffer {
+    deinit(void) {
+        self->data.deinit();   // explicit — Coda will not inject this
+    }
+}
+```
+
+### Return-transfer
+
+When returning a local variable of a type with `deinit`, the compiler
+suppresses the automatic `deinit` call for that variable, transferring
+ownership to the caller:
+
+```coda
+struct String make(void) {
+    String s("hello");
+    return s;                      // s is not deinit'd — transfer to caller
+}
+```
+
+The caller receives a live object and is responsible for calling `deinit`.
+
+### Discarded return values
+
+A call to a function or method that returns a type with `deinit` must capture
+the return value. Discarding it is rejected (E071):
+
+```coda
+void run(void) {
+    make();                        // ERROR (E071): discarded return value
+    struct String s = make();      // OK — captured (but not init-declared)
+}
+```
+
+### Non-deinit types
+
+Variables of types without `deinit` are unaffected — no zero-init, no
+automatic cleanup, and no diagnostic on discard.
 
 Default arguments are not supported in 0.1. Use an explicit helper or factory.
 

@@ -79,6 +79,42 @@ class TestSemantics(unittest.TestCase):
         self.assertIsNotNone(info)
         self.assertEqual(info.base_name, "Entity")
 
+    def test_has_deinit_returns_true(self):
+        source = """
+        struct String { char *data; };
+        impl String {
+            init(void) { }
+            deinit(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        self.assertTrue(analyzer.has_deinit("String"))
+
+    def test_has_deinit_returns_false(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            void move(int dx, int dy) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        self.assertFalse(analyzer.has_deinit("Point"))
+
+    def test_has_deinit_inherited(self):
+        source = """
+        struct Base { int id; };
+        impl Base {
+            deinit(void) { }
+        }
+        struct Derived : Base { int x; };
+        impl Derived {
+            void stuff(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        self.assertTrue(analyzer.has_deinit("Derived"),
+                        "Derived inherits deinit from Base")
+
     def test_operator_detected(self):
         source = """
         struct Fix16 { int32_t raw; };

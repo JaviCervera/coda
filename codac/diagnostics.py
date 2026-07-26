@@ -44,6 +44,9 @@ ERROR_CODES = {
     "E051": "invalid operator signature",
     "E052": "invalid operator operand",
     "E060": "Coda syntax in unsupported opaque C extension",
+    "E070": "explicit deinit on automatic variable with scope cleanup",
+    "E071": "discarded return value of type with deinit",
+    "E072": "goto across variable with deinit",
 }
 
 

@@ -99,6 +99,7 @@ class Emitter:
         for decl in module.top_level:
             if decl.kind == "preserved":
                 for t in decl.preserved_tokens:
+                    lines.append(t.leading_trivia)
                     lines.append(t.spelling)
                 lines.append("\n")
 

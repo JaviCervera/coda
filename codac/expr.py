@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from codac.ast import Expr, Stmt, Token
+from codac.diagnostics import Diagnostic
 from codac.names import method_c_name
 from codac.typesys import SemanticAnalyzer
 
@@ -149,12 +150,55 @@ def _parse_prefix(c: Cursor) -> Expr | None:
     return None
 
 
-def _parse_stmts(tokens: list[Token]) -> list[Stmt]:
+def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | None:
+    type_tokens: list[Token] = []
+
+    if c.peek_spelling() in ("struct", "union"):
+        type_tokens.append(c.advance())
+
+    if not c.peek() or c.peek().kind != "identifier":
+        return None
+    type_token = c.advance()
+    type_name = type_token.spelling
+    type_tokens.append(type_token)
+
+    if not c.peek() or c.peek().kind != "identifier":
+        return None
+    var_token = c.advance()
+    var_name = var_token.spelling
+
+    has_init = False
+    init_tokens: list[Token] = []
+    if c.peek_spelling() == "(":
+        has_init = True
+        depth = 0
+        while not c.done:
+            t = c.advance()
+            init_tokens.append(t)
+            if t.spelling == "(":
+                depth += 1
+            elif t.spelling == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+
+    if c.peek_spelling() == ";":
+        c.advance()
+
+    return Stmt(
+        kind="vardecl", tokens=[],
+        var_name=var_name, var_type=type_name,
+        has_init_call=has_init,
+        var_init_arg_tokens=init_tokens,
+    )
+
+
+def _parse_stmts(tokens: list[Token], type_names: frozenset[str] = frozenset()) -> list[Stmt]:
     c = Cursor(tokens)
     stmts: list[Stmt] = []
     c.match("{")
     while not c.done and c.peek_spelling() != "}":
-        stmt = _parse_stmt(c)
+        stmt = _parse_stmt(c, type_names)
         if stmt:
             stmts.append(stmt)
         else:
@@ -162,12 +206,12 @@ def _parse_stmts(tokens: list[Token]) -> list[Stmt]:
     return stmts
 
 
-def _parse_stmt(c: Cursor) -> Stmt | None:
+def _parse_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt | None:
     if c.match("return"):
         return _finish_return(c)
 
     if c.match("{"):
-        return _finish_block(c)
+        return _finish_block(c, type_names)
 
     if c.peek_spelling() in ("if", "while", "for", "do", "switch", "case", "break", "continue", "goto", "else"):
         return _parse_raw_until_semicolon_or_brace(c)
@@ -175,7 +219,25 @@ def _parse_stmt(c: Cursor) -> Stmt | None:
     if c.peek_spelling() in DECL_KEYWORDS:
         return _parse_raw_until_semicolon(c)
 
-    return _parse_expr_stmt(c)
+    t = c.peek()
+    if t and t.kind == "identifier":
+        saved = c.pos
+        if t.spelling in type_names:
+            c.advance()
+            if c.peek() and c.peek().kind == "identifier":
+                c.pos = saved
+                return _parse_coda_declaration(c, type_names)
+            c.pos = saved
+        elif t.spelling == "struct":
+            c.advance()
+            if c.peek() and c.peek().kind == "identifier" and c.peek().spelling in type_names:
+                c.advance()
+                if c.peek() and c.peek().kind == "identifier":
+                    c.pos = saved
+                    return _parse_coda_declaration(c, type_names)
+            c.pos = saved
+
+    return _parse_expr_stmt(c, type_names)
 
 
 def _finish_return(c: Cursor) -> Stmt:
@@ -188,7 +250,7 @@ def _finish_return(c: Cursor) -> Stmt:
     return Stmt(kind="return_stmt", tokens=tokens, children=[], expr=expr)
 
 
-def _finish_block(c: Cursor) -> Stmt:
+def _finish_block(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt:
     depth = 1
     tokens: list[Token] = []
     while not c.done and depth > 0:
@@ -198,7 +260,7 @@ def _finish_block(c: Cursor) -> Stmt:
             depth += 1
         elif t.spelling == "}":
             depth -= 1
-    inner = _parse_stmts(tokens[:0]) if len(tokens) <= 1 else _parse_stmts(tokens[:-1])
+    inner = _parse_stmts(tokens[:0], type_names) if len(tokens) <= 1 else _parse_stmts(tokens[:-1], type_names)
     return Stmt(kind="block", tokens=tokens, children=inner)
 
 
@@ -228,7 +290,7 @@ def _parse_raw_until_semicolon_or_brace(c: Cursor) -> Stmt:
     return Stmt(kind="passthrough", tokens=tokens)
 
 
-def _parse_expr_stmt(c: Cursor) -> Stmt:
+def _parse_expr_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt:
     tokens: list[Token] = []
     while not c.done and c.peek_spelling() != ";":
         tokens.append(c.advance())
@@ -245,8 +307,22 @@ def _parse_expr_raw(tokens: list[Token]) -> Expr | None:
     return _parse_expr(c, 0)
 
 
-def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer) -> Expr:
-    expr.children = [_lower_expr(c, current_struct, analyzer) for c in expr.children]
+def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, str]:
+    var_info: dict[str, str] = {}
+    def walk(stmts: list[Stmt]):
+        for s in stmts:
+            if s.kind == "vardecl" and s.var_name and s.var_type:
+                if analyzer.has_deinit(s.var_type):
+                    var_info[s.var_name] = s.var_type
+            for c in s.children:
+                walk([c])
+    walk(stmts)
+    return var_info
+
+
+def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
+                var_info: dict[str, str] | None = None) -> Expr:
+    expr.children = [_lower_expr(c, current_struct, analyzer, var_info) for c in expr.children]
 
     if expr.kind == "call" and len(expr.children) >= 1:
         callee = expr.children[0]
@@ -254,8 +330,20 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer) -> 
             method_name = callee.value or ""
             receiver = callee.children[0] if callee.children else None
             if receiver:
+                if method_name == "deinit" and callee.kind == "member":
+                    if var_info:
+                        recv_name = receiver.value if receiver.value else ""
+                        if recv_name in var_info:
+                            analyzer.diagnostics.append(Diagnostic(
+                                code="E070",
+                                message=f"explicit deinit() on automatic variable of type '{var_info[recv_name]}' which has scope cleanup",
+                                span=expr.token.span if expr.token and expr.token.span else None,
+                            ))
+                            return expr
+
                 impl_info, struct_name = _resolve_method(method_name, receiver, current_struct, analyzer)
                 if impl_info and struct_name and method_name in impl_info.methods:
+                    sig = impl_info.methods[method_name]
                     c_name = method_c_name(struct_name, method_name)
                     new_children: list[Expr] = []
                     if callee.kind == "member":
@@ -267,13 +355,14 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer) -> 
                         new_children.append(arg)
                     name_tok = Token("identifier", c_name, None)
                     ident = Expr(kind="ident", token=name_tok, value=c_name)
-                    return Expr(kind="call", token=name_tok, children=[ident] + new_children)
+                    call = Expr(kind="call", token=name_tok, children=[ident] + new_children)
+                    call.value = sig.result_type if method_name != "deinit" else None
+                    return call
 
     return expr
 
 
 def _resolve_method(method_name: str, receiver: Expr, current_struct: str, analyzer: SemanticAnalyzer):
-    """Given a method name and receiver expression, find the implementation info and struct name."""
     target_type = _resolve_type(receiver, current_struct, analyzer)
     if target_type:
         impl = analyzer.get_implementation(target_type)
@@ -336,11 +425,15 @@ def _extract_field_type_name(tokens: list[Token], name_token: Token) -> str | No
     return raw if raw else None
 
 
-def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer) -> Stmt:
-    if stmt.expr:
-        stmt.expr = _lower_expr(stmt.expr, current_struct, analyzer)
-    stmt.children = [_lower_stmt(c, current_struct, analyzer) for c in stmt.children]
-    return stmt
+def _type_has_deinit(type_str: str, analyzer: SemanticAnalyzer) -> bool:
+    clean = type_str.strip()
+    if clean.startswith("struct "):
+        clean = clean[7:]
+    while clean.endswith("*"):
+        clean = clean[:-1].strip()
+    if clean.startswith("const "):
+        clean = clean[6:].strip()
+    return analyzer.has_deinit(clean)
 
 
 def _emit_expr(expr: Expr | None) -> str:
@@ -374,6 +467,22 @@ def _emit_expr(expr: Expr | None) -> str:
 
 
 def _emit_stmt(stmt: Stmt) -> str:
+    if stmt.kind == "vardecl":
+        type_name = stmt.var_type or ""
+        var_name = stmt.var_name or ""
+        if stmt.has_init_call and stmt.var_init_arg_tokens:
+            inner = stmt.var_init_arg_tokens
+            if len(inner) >= 2 and inner[0].spelling == "(" and inner[-1].spelling == ")":
+                inner = inner[1:-1]
+            arg_text = "".join(t.leading_trivia + t.spelling for t in inner).strip()
+            return f"struct {type_name} {var_name};\n{type_name}_init(&{var_name}{', ' + arg_text if arg_text else ''});"
+        return f"struct {type_name} {var_name} = {{0}};"
+
+    if stmt.kind == "deinit_call":
+        var_name = stmt.var_name or ""
+        type_name = stmt.var_type or ""
+        return f"{type_name}_deinit(&{var_name});"
+
     if stmt.kind == "expr_stmt":
         result = _emit_expr(stmt.expr) if stmt.expr else ""
         for t in stmt.tokens:
@@ -413,9 +522,112 @@ def _emit_stmt(stmt: Stmt) -> str:
     return result
 
 
+def _analyze_scope(stmts: list[Stmt], analyzer: SemanticAnalyzer):
+    scope_map: dict[int, list[tuple[str, str]]] = {}
+
+    def collect_block_vars(stmts: list[Stmt]) -> list[tuple[str, str]]:
+        vars_in_scope: list[tuple[str, str]] = []
+        for stmt in stmts:
+            if stmt.kind == "vardecl" and stmt.var_name and stmt.var_type:
+                if analyzer.has_deinit(stmt.var_type):
+                    vars_in_scope.append((stmt.var_name, stmt.var_type))
+            if stmt.kind == "block":
+                block_vars = collect_block_vars(stmt.children)
+                if block_vars:
+                    scope_map[id(stmt)] = block_vars
+        return vars_in_scope
+
+    root_vars = collect_block_vars(stmts)
+    return scope_map, root_vars
+
+
+def _extract_returned_var(expr: Expr | None) -> str | None:
+    if expr and expr.kind in ("ident", "identifier"):
+        return expr.value or expr.token.spelling
+    return None
+
+
+def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[str, str]] | None = None) -> list[Stmt]:
+    scope_stack: list[list[tuple[str, str]]] = [root_vars] if root_vars else []
+
+    def walk(stmts: list[Stmt]) -> list[Stmt]:
+        new_stmts: list[Stmt] = []
+        for stmt in stmts:
+            if stmt.kind == "block":
+                block_id = id(stmt)
+                block_vars = scope_map.get(block_id, [])
+                scope_stack.append(block_vars)
+                stmt.children = walk(stmt.children)
+                for var_name, type_name in reversed(block_vars):
+                    stmt.children.append(Stmt(
+                        kind="deinit_call", tokens=[],
+                        var_name=var_name, var_type=type_name,
+                    ))
+                scope_stack.pop()
+                new_stmts.append(stmt)
+
+            elif stmt.kind == "return_stmt":
+                returned_var = _extract_returned_var(stmt.expr)
+                all_vars: list[tuple[str, str]] = []
+                for scope in scope_stack:
+                    all_vars.extend(scope)
+                for var_name, type_name in reversed(all_vars):
+                    if var_name != returned_var:
+                        new_stmts.append(Stmt(
+                            kind="deinit_call", tokens=[],
+                            var_name=var_name, var_type=type_name,
+                        ))
+                new_stmts.append(stmt)
+
+            else:
+                new_stmts.append(stmt)
+        return new_stmts
+
+    return walk(stmts)
+
+
+def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer,
+                var_info: dict[str, str] | None = None) -> Stmt:
+    if stmt.expr:
+        stmt.expr = _lower_expr(stmt.expr, current_struct, analyzer, var_info)
+
+        if stmt.kind == "expr_stmt" and stmt.expr.kind == "call":
+            result_type = stmt.expr.value
+            if result_type and _type_has_deinit(result_type, analyzer):
+                analyzer.diagnostics.append(Diagnostic(
+                    code="E071",
+                    message=f"discarded return value: call returns type '{result_type}' which has deinit",
+                    span=stmt.expr.token.span if stmt.expr.token and stmt.expr.token.span else None,
+                ))
+
+    stmt.children = [_lower_stmt(c, current_struct, analyzer, var_info) for c in stmt.children]
+    return stmt
+
+
 def lower_method_body(tokens: list[Token], struct_name: str, analyzer: SemanticAnalyzer) -> str:
-    stmts = _parse_stmts(tokens)
-    stmts = [_lower_stmt(s, struct_name, analyzer) for s in stmts]
+    type_names = frozenset(analyzer.structs.keys())
+
+    stmts = _parse_stmts(tokens, type_names)
+    var_info = _build_var_info(stmts, analyzer)
+    stmts = [_lower_stmt(s, struct_name, analyzer, var_info) for s in stmts]
+
+    scope_map, root_vars = _analyze_scope(stmts, analyzer)
+
+    stmts = _inject_cleanup(stmts, scope_map, root_vars)
+
+    returned_var = None
+    for s in stmts:
+        if s.kind == "return_stmt":
+            returned_var = _extract_returned_var(s.expr)
+            break
+
+    for var_name, type_name in reversed(root_vars):
+        if var_name != returned_var:
+            stmts.append(Stmt(
+                kind="deinit_call", tokens=[],
+                var_name=var_name, var_type=type_name,
+            ))
+
     parts: list[str] = []
     for s in stmts:
         text = _emit_stmt(s)

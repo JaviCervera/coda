@@ -47,7 +47,8 @@ codac/
   modules.py              import graph and module loading
   typesys.py              semantic model and type resolution
   specialize.py           template-instantiation collection
-  lower.py                Coda-expression and object-model lowering
+  lower.py                Coda-object-model lowering and body dispatch
+  expr.py                 Coda-expression lowering, scope analysis, cleanup injection
   emit.py                 deterministic .h/.c emission
   names.py                C identifier mangling and include guards
 tests/
@@ -98,8 +99,21 @@ read source
   -> semantic collection and type resolution
   -> template-instantiation discovery
   -> object-model layout and virtual-slot calculation
-  -> expression lowering
+  -> expression lowering and scope-guard injection
   -> deterministic C header/source emission
+```
+
+The lowering stage (`codac/expr.py`) handles both Coda-construct lowering
+(method calls, operator calls) and scope-based cleanup injection. After
+parsing a method body, the pipeline is:
+
+```text
+parse tokens into preliminary Stmt list
+  -> build variable-info map (var name -> type for deinit types)
+  -> lower each Stmt (method/operator calls, diagnostics)
+  -> analyze scope (collect variables needing cleanup)
+  -> inject cleanup (deinit calls before returns and at block exits)
+  -> emit each Stmt to C text
 ```
 
 Compilation is whole-program over the root module's `#import` closure. This is
@@ -494,7 +508,58 @@ Sprite_update(OwnedPtr_Sprite_operator_arrow(&sprite));
 Unary `operator*` must return a pointer. `*sprite` has the pointed-to type and is
 an lvalue, allowing forms such as `(*sprite).move(1, 0)`.
 
-### 10.4 Disallowed overloads
+### 10.4 Auto-deinit and scope cleanup
+
+When a struct has a `deinit` method, Coda may inject automatic cleanup for
+stack-local variables declared with init-declaration syntax
+(`Type var(args)` or `Type var;`).
+
+**Init-declaration parsing** (`_parse_coda_declaration`):
+
+1. The parser peeks ahead at identifiers in statement position. If the first
+   identifier is a known Coda struct name and the second is a new identifier,
+   the statement is parsed as a Coda declaration rather than an expression.
+2. If followed by `(args)`, the declaration records an init call; the argument
+   tokens are preserved for the generated `Type_init(&var, ...)` call.
+3. If no init call is present, the variable is zero-initialized.
+
+**Variable-info map** (`_build_var_info`):
+
+Before lowering, walk the parsed statements and collect every variable
+declared with a type that has `deinit`. The map `{var_name: type_name}` is
+passed to expression lowering so that `.deinit()` calls on auto variables
+can be rejected (E070).
+
+**Scope analysis** (`_analyze_scope`):
+
+Walk the statement tree and collect `(var_name, type_name)` pairs for every
+declared variable whose type has `deinit`. Pairs are grouped by the owning
+block statement (keyed by `id(block)`), including root-level vars.
+
+**Cleanup injection** (`_inject_cleanup`):
+
+After lowering, insert `Type_deinit(&var)` calls:
+
+- Before each `return` statement: deinit every live variable in reverse
+  declaration order, except the variable being returned (return-transfer).
+- At the end of each block (including the function body): deinit every
+  variable declared in that block, in reverse order, unless the block's
+  last statement is a return of that variable.
+
+Return-transfer suppresses deinit for the exact variable returned via
+`return var;`. Complex return expressions (`return f(...)`) still deinit
+all live variables.
+
+**Diagnostic checking:**
+
+- **E070**: A `.deinit()` call whose receiver is a known auto variable name
+  (from the variable-info map) is rejected. This prevents double-free.
+- **E071**: An expression statement whose lowered call carries a result type
+  that has `deinit` is rejected. The caller must capture the return value.
+- **E072**: (reserved for future) A `goto` that crosses a variable
+  declaration with `deinit`.
+
+### 10.5 Disallowed overloads
 
 Hard-code the permitted list from `LANGUAGE.md`. Any other `operator` declaration
 is a diagnostic. In particular, never overload `=`, `&&`, `||`, casts, comma,
@@ -555,6 +620,9 @@ E050 unsupported operator
 E051 invalid operator signature
 E052 invalid operator operand
 E060 Coda syntax in unsupported opaque C extension
+E070 explicit deinit() on automatic variable that has scope cleanup
+E071 discarded return value of type with deinit
+E072 goto across variable with deinit
 ```
 
 Every diagnostic must point to the relevant Coda token and, where useful, include
@@ -624,7 +692,22 @@ for AST/semantic snapshots when parser failures need focused tests.
 - invalid `init`/`deinit` signatures (`E013`);
 - duplicate methods, method overloading attempt, and field/method collision
   (`E014`);
-- no implicit allocation or destructor calls are emitted.
+- no implicit allocation or destructor calls are emitted without
+  init-declaration syntax.
+
+**Auto-deinit tests:**
+
+- a variable declared with `Type var(args)` on a type with `deinit` emits a
+  `Type_init` call followed by `Type_deinit` at scope exit;
+- a variable declared with `Type var;` on a type with `deinit` but no `init`
+  is zero-initialized (`= {0}`) and deinit'd at scope exit;
+- variables without `deinit` are unaffected;
+- multiple variables are deinit'd in reverse declaration order;
+- nested block variables are deinit'd before outer variables;
+- return-transfer: `return var` suppresses deinit for that variable;
+- explicit `.deinit()` on an auto variable triggers E070;
+- discarded return value of a function returning a deinit type triggers E071;
+- generated C for auto-deinit compiles with `-Wall -Wextra -Werror -std=c89`;
 
 ### 13.5 Inheritance and virtual-dispatch tests
 
