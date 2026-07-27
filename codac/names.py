@@ -1,4 +1,5 @@
 import hashlib
+import os
 
 
 def mangle_type_name(type_name: str) -> str:
@@ -87,4 +88,5 @@ def include_guard(path: str) -> str:
 
 
 def include_path(module_path: str) -> str:
-    return module_path.replace(".cod", ".h")
+    root, _ = os.path.splitext(module_path)
+    return root + ".h"

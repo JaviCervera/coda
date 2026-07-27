@@ -7,7 +7,7 @@ architecture, lowering, diagnostics, and tests.
 
 ## 1. Scope and non-goals
 
-`codac` compiles a root `.cod` file and its `#import` closure into generated C
+`codac` compiles a root `.co` file and its `#import` closure into generated C
 headers and implementation files. z88dk (or another configured C compiler)
 compiles the generated C.
 
@@ -68,12 +68,12 @@ added, but no test should require it.
 The initial CLI is intentionally small:
 
 ```text
-codac ROOT.cod --out-dir DIR [-I DIR]... [--emit-deps FILE] [--keep-going]
+codac ROOT.co --out-dir DIR [-I DIR]... [--emit-deps FILE] [--keep-going]
 ```
 
 Required behavior:
 
-- `ROOT.cod` is the entry module.
+- `ROOT.co` is the entry module.
 - `--out-dir` receives one `.h` and one `.c` for every imported Coda module.
 - `-I` adds directories searched by `#import` after the importing module's
   directory.
@@ -85,7 +85,7 @@ Required behavior:
 Example:
 
 ```text
-codac game.cod --out-dir build/coda -I lib
+codac game.co --out-dir build/coda -I lib
 zcc +zx -Ibuild/coda build/coda/game.c build/coda/point.c -o game
 ```
 
@@ -147,7 +147,7 @@ Preprocessor directives are represented as opaque directive tokens except for a
 strictly recognized import form:
 
 ```text
-#import "relative-or-search-path.cod"
+#import "relative-or-search-path.co"
 ```
 
 `#import` inside a macro continuation or a `#if`/`#ifdef`/`#ifndef` branch is a
@@ -181,7 +181,7 @@ diagnostic asking the user to rewrite that particular expression in ordinary C.
 At top level, recognize these Coda forms:
 
 ```text
-#import "path.cod"
+#import "path.co"
 
 template <Identifier (, Identifier)*>
     struct-definition [: BaseName]
@@ -264,7 +264,7 @@ emission and diagnostics where possible.
 
 ### 7.1 Ownership and foreign types
 
-A Coda-owned struct is defined in a `.cod` module. A struct seen only through a
+A Coda-owned struct is defined in a `.co` module. A struct seen only through a
 C `#include` is foreign.
 
 - Coda-owned structs may have implementations, inheritance, and virtual methods.
@@ -573,7 +573,7 @@ increments, or decrements.
 
 ## 11. Header and source emission
 
-For every `foo.cod`, emit `foo.h` and `foo.c`.
+For every `foo.co`, emit `foo.h` and `foo.c`.
 
 `foo.h` contains, in deterministic order:
 
@@ -594,7 +594,7 @@ For every `foo.cod`, emit `foo.h` and `foo.c`.
 
 Use `#line` directives before re-emitted user method bodies and preserved C
 regions. Diagnostics produced by the target C compiler should therefore refer to
-the original `.cod` source as often as possible.
+the original `.co` source as often as possible.
 
 Never emit a Coda-only token (`impl`, `virtual`, template angle-bracket
 types, `#import`, or `operator` declarations) into generated C.
@@ -645,11 +645,11 @@ expected generated files, and an optional expected diagnostic file.
 ```text
 tests/fixtures/
   methods/
-    point.cod
+    point.co
     expected/point.h
     expected/point.c
   errors/duplicate_method/
-    input.cod
+    input.co
     expected.txt
 ```
 

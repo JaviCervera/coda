@@ -5,7 +5,7 @@ from codac.parser import Parser
 
 class TestParser(unittest.TestCase):
     def parse(self, source: str):
-        parser = Parser("test.cod", source)
+        parser = Parser("test.co", source)
         return parser.parse()
 
     def test_empty_module(self):
@@ -18,9 +18,9 @@ class TestParser(unittest.TestCase):
         self.assertEqual(module.top_level[0].kind, "include")
 
     def test_import(self):
-        module = self.parse('#import "point.cod"\n')
+        module = self.parse('#import "point.co"\n')
         self.assertEqual(len(module.imports), 1)
-        self.assertEqual(module.imports[0].path, "point.cod")
+        self.assertEqual(module.imports[0].path, "point.co")
 
     def test_simple_struct(self):
         module = self.parse("struct Point { int x; int y; };")

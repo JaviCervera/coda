@@ -13,7 +13,7 @@ jobs:
         run: python -m unittest discover tests/ -v
       - name: End-to-end example
         run: |
-          python -m codac examples/shapes.cod --out-dir /tmp/ci &&
+          python -m codac examples/shapes.co --out-dir /tmp/ci &&
           cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \
              -o /tmp/shapes_ci /tmp/ci/shapes.c examples/shapes_main.c &&
           /tmp/shapes_ci

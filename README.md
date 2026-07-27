@@ -18,14 +18,14 @@ compiler architecture and lowering strategy are documented in
 - **Operator overloading** — `struct Vec2 operator+(struct Vec2 rhs) { ... }`
 - **Templates** — `template<T> struct Array { ... }`
 - **Foreign struct extensions** — extra methods on C types via `foreign impl`
-- **Imports** — modular compilation across `.cod` files
+- **Imports** — modular compilation across `.co` files
 - **Lossless lexer + structural parser** — preserves `#include`, `typedef`,
   `union`, `enum` and trivia for round-tripping
 
 ## Usage
 
 ```bash
-python -m codac <file.cod> [--out-dir <dir>]
+python -m codac <file.co> [--out-dir <dir>]
 ```
 
 Output: a `.h` / `.c` pair per module.  Compile with any C89+ toolchain:
@@ -36,7 +36,7 @@ cc -std=c89 -Wall -Wextra -Werror -I<out-dir> -o <bin> <out-dir>/<module>.c <you
 
 ## Example — shapes
 
-Save as `shapes.cod`:
+Save as `shapes.co`:
 
 ```coda
 struct Point {
@@ -110,7 +110,7 @@ impl Vec2 {
 Compile:
 
 ```bash
-python -m codac shapes.cod --out-dir build/
+python -m codac shapes.co --out-dir build/
 ```
 
 The compiler generates `build/shapes.h` and `build/shapes.c`.  Key parts of

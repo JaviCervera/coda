@@ -90,9 +90,9 @@ class Parser:
 
         if text.startswith("#import"):
             rest = text[len("#import"):].strip().strip('"')
-            if not rest.endswith(".cod"):
+            if not rest.endswith(".co"):
                 self.diagnostics.append(Diagnostic(
-                    code="E001", message="malformed import: must be #import \"path.cod\"", span=token.span,
+                    code="E001", message="malformed import: must be #import \"path.co\"", span=token.span,
                 ))
                 return None
             import_path = rest

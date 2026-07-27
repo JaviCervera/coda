@@ -5,7 +5,7 @@ from codac.lexer import Lexer
 
 class TestLexer(unittest.TestCase):
     def lex(self, source: str):
-        lexer = Lexer("test.cod", source)
+        lexer = Lexer("test.co", source)
         return lexer.lex()
 
     def test_empty(self):
@@ -86,10 +86,10 @@ class TestLexer(unittest.TestCase):
         self.assertEqual(sf.tokens[0].kind, "directive")
 
     def test_import_directive(self):
-        sf = self.lex('#import "point.cod"\n')
+        sf = self.lex('#import "point.co"\n')
         self.assertEqual(len(sf.tokens), 1)
         self.assertEqual(sf.tokens[0].kind, "directive")
-        self.assertIn('"point.cod"', sf.tokens[0].spelling)
+        self.assertIn('"point.co"', sf.tokens[0].spelling)
 
     def test_coda_keywords_in_comments(self):
         sf = self.lex("// impl\nint x;")
@@ -109,7 +109,7 @@ class TestLexer(unittest.TestCase):
         self.assertIn("  ", sf.tokens[1].leading_trivia)
 
     def test_source_map(self):
-        lexer = Lexer("test.cod", "int x;\nint y;")
+        lexer = Lexer("test.co", "int x;\nint y;")
         sf = lexer.lex()
         self.assertEqual(len(sf.tokens), 6)
         line, col = lexer.source_map.offset_to_line_col(5)

@@ -4,7 +4,7 @@ Coda is a source-to-source language that adds a deliberately small object model 
 the C dialect accepted by its target compiler. Its primary target is constrained
 systems, including z88dk targets.
 
-`codac` consumes `.cod` files and emits ordinary C source and headers. The target
+`codac` consumes `.co` files and emits ordinary C source and headers. The target
 C compiler remains responsible for compiling, assembling, and linking the program.
 
 ## Design rules
@@ -20,14 +20,14 @@ C compiler remains responsible for compiling, assembling, and linking the progra
 
 ## Source files and modules
 
-Coda source files use the `.cod` extension. A Coda module may include C headers
+Coda source files use the `.co` extension. A Coda module may include C headers
 and import other Coda modules:
 
 ```coda
 #include <stdint.h>
 #include "legacy.h"
 
-#import "point.cod"
+#import "point.co"
 ```
 
 `#include` is passed to generated C. `#import` is consumed by Coda: it imports the
@@ -40,12 +40,12 @@ the involved declarations, for example through pointers and forward declarations
 cycles containing structs by value remain invalid.
 
 ```coda
-// a.cod
-#import "b.cod"
+// a.co
+#import "b.co"
 struct A { struct B *b; };
 
-// b.cod
-#import "a.cod"
+// b.co
+#import "a.co"
 struct B { struct A *a; };
 ```
 

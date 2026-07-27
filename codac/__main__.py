@@ -13,9 +13,9 @@ from codac.specialize import Specializer
 def main():
     parser = argparse.ArgumentParser(
         prog="codac",
-        description="Coda-to-C compiler — translates .cod files to C",
+        description="Coda-to-C compiler — translates .co files to C",
     )
-    parser.add_argument("root", metavar="ROOT.cod", help="Entry module")
+    parser.add_argument("root", metavar="ROOT.co", help="Entry module")
     parser.add_argument("--out-dir", required=True, help="Output directory for generated .h and .c files")
     parser.add_argument("-I", "--include", dest="include_dirs", action="append", default=[], help="Search path for #import")
     parser.add_argument("--emit-deps", metavar="FILE", help="Write make-style dependency file")
@@ -23,8 +23,8 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.root.endswith(".cod"):
-        print(f"error: root module must have .cod extension: {args.root}", file=sys.stderr)
+    if not args.root.endswith(".co"):
+        print(f"error: root module must have .co extension: {args.root}", file=sys.stderr)
         sys.exit(1)
 
     all_diagnostics: list[Diagnostic] = []

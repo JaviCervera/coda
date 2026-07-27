@@ -6,7 +6,7 @@ from codac.typesys import SemanticAnalyzer
 
 class TestSemantics(unittest.TestCase):
     def analyze(self, source: str):
-        parser = Parser("test.cod", source)
+        parser = Parser("test.co", source)
         module = parser.parse()
         analyzer = SemanticAnalyzer()
         analyzer.analyze(module)

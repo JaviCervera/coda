@@ -10,7 +10,7 @@ from codac.typesys import SemanticAnalyzer
 
 class TestEmit(unittest.TestCase):
     def emit_source(self, source: str, module_name: str = "test") -> tuple[str, str]:
-        parser = Parser(f"{module_name}.cod", source)
+        parser = Parser(f"{module_name}.co", source)
         module = parser.parse()
 
         analyzer = SemanticAnalyzer()
@@ -35,7 +35,7 @@ class TestEmit(unittest.TestCase):
             return h_content, c_content
 
     def _emit_with_diagnostics(self, source: str, module_name: str = "test"):
-        parser = Parser(f"{module_name}.cod", source)
+        parser = Parser(f"{module_name}.co", source)
         module = parser.parse()
 
         analyzer = SemanticAnalyzer()
@@ -138,7 +138,7 @@ class TestEmit(unittest.TestCase):
 
     def test_include_guard(self):
         h, c = self.emit_source("", "my_module")
-        self.assertIn("CODA_MY_MODULE_COD", h)
+        self.assertIn("CODA_MY_MODULE_CO", h)
 
     def test_auto_deinit_zero_init(self):
         source = """

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`codac` is a source-to-source compiler that consumes `.cod` files and emits
+`codac` is a source-to-source compiler that consumes `.co` files and emits
 ordinary C source and headers. The target C compiler remains responsible for
 compiling, assembling, and linking.
 

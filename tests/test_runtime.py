@@ -11,7 +11,7 @@ from codac.typesys import SemanticAnalyzer
 
 class TestRuntime(unittest.TestCase):
     def _compile_and_run(self, cod_source: str, c_helpers: str = "", test_main: str = "") -> str:
-        parser = Parser("test.cod", cod_source)
+        parser = Parser("test.co", cod_source)
         module = parser.parse()
 
         analyzer = SemanticAnalyzer()
