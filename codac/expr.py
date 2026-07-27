@@ -151,36 +151,49 @@ def _parse_prefix(c: Cursor) -> Expr | None:
 
 
 def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | None:
+    saved = c.pos
     type_tokens: list[Token] = []
 
     if c.peek_spelling() in ("struct", "union"):
         type_tokens.append(c.advance())
 
     if not c.peek() or c.peek().kind != "identifier":
+        c.pos = saved
         return None
     type_token = c.advance()
     type_name = type_token.spelling
     type_tokens.append(type_token)
 
     if not c.peek() or c.peek().kind != "identifier":
+        c.pos = saved
         return None
     var_token = c.advance()
     var_name = var_token.spelling
 
     has_init = False
     init_tokens: list[Token] = []
-    if c.peek_spelling() == "(":
-        has_init = True
-        depth = 0
-        while not c.done:
-            t = c.advance()
-            init_tokens.append(t)
-            if t.spelling == "(":
-                depth += 1
-            elif t.spelling == ")":
-                depth -= 1
-                if depth == 0:
-                    break
+    if c.peek_spelling() == ".":
+        c.advance()
+        if c.peek() and c.peek().kind == "identifier" and c.peek().spelling == "init":
+            c.advance()
+            if c.peek_spelling() == "(":
+                has_init = True
+                depth = 0
+                while not c.done:
+                    t = c.advance()
+                    init_tokens.append(t)
+                    if t.spelling == "(":
+                        depth += 1
+                    elif t.spelling == ")":
+                        depth -= 1
+                        if depth == 0:
+                            break
+            else:
+                c.pos = saved
+                return None
+        else:
+            c.pos = saved
+            return None
 
     if c.peek_spelling() == ";":
         c.advance()

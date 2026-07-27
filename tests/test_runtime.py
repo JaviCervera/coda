@@ -120,7 +120,7 @@ class TestRuntime(unittest.TestCase):
         struct Test { int dummy; };
         impl Test {
             void run(void) {
-                String s("hello");
+                String s.init("hello");
             }
         }
         """
@@ -138,7 +138,7 @@ class TestRuntime(unittest.TestCase):
         struct Test { int dummy; };
         impl Test {
             void run(void) {
-                String s("hello");
+                String s.init("hello");
             }
         }
         """

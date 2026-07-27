@@ -512,15 +512,15 @@ an lvalue, allowing forms such as `(*sprite).move(1, 0)`.
 
 When a struct has a `deinit` method, Coda may inject automatic cleanup for
 stack-local variables declared with init-declaration syntax
-(`Type var(args)` or `Type var;`).
+(`Type var.init(args)` or `Type var;`).
 
 **Init-declaration parsing** (`_parse_coda_declaration`):
 
 1. The parser peeks ahead at identifiers in statement position. If the first
    identifier is a known Coda struct name and the second is a new identifier,
    the statement is parsed as a Coda declaration rather than an expression.
-2. If followed by `(args)`, the declaration records an init call; the argument
-   tokens are preserved for the generated `Type_init(&var, ...)` call.
+2. If followed by `.init(args)`, the declaration records an init call; the
+   argument tokens are preserved for the generated `Type_init(&var, ...)` call.
 3. If no init call is present, the variable is zero-initialized.
 
 **Variable-info map** (`_build_var_info`):
@@ -697,7 +697,7 @@ for AST/semantic snapshots when parser failures need focused tests.
 
 **Auto-deinit tests:**
 
-- a variable declared with `Type var(args)` on a type with `deinit` emits a
+- a variable declared with `Type var.init(args)` on a type with `deinit` emits a
   `Type_init` call followed by `Type_deinit` at scope exit;
 - a variable declared with `Type var;` on a type with `deinit` but no `init`
   is zero-initialized (`= {0}`) and deinit'd at scope exit;

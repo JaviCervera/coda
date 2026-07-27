@@ -168,7 +168,7 @@ class TestEmit(unittest.TestCase):
         struct Example { int dummy; };
         impl Example {
             void run(void) {
-                String s("hello");
+                String s.init("hello");
             }
         }
         """
@@ -188,7 +188,7 @@ class TestEmit(unittest.TestCase):
         struct Example { int dummy; };
         impl Example {
             struct String make(void) {
-                String s("hello");
+                String s.init("hello");
                 return s;
             }
         }
@@ -226,7 +226,7 @@ class TestEmit(unittest.TestCase):
         struct Example { int dummy; };
         impl Example {
             struct String make(void) {
-                String s("hello");
+                String s.init("hello");
                 return s;
             }
             void run(void) {
@@ -265,8 +265,8 @@ class TestEmit(unittest.TestCase):
         struct Example { int dummy; };
         impl Example {
             void run(void) {
-                String a("first");
-                String b("second");
+                String a.init("first");
+                String b.init("second");
             }
         }
         """
@@ -289,9 +289,9 @@ class TestEmit(unittest.TestCase):
         impl Example {
             void run(void) {
                 {
-                    String inner("inner");
+                    String inner.init("inner");
                 }
-                String outer("outer");
+                String outer.init("outer");
             }
         }
         """

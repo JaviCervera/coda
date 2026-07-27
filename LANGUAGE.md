@@ -188,13 +188,13 @@ impl String {
     deinit(void) { /* release data */ }
 }
 
-impl Example {
-    void run(void) {
-        String s("hello");         // init-declaration: calls String_init(&s, "hello")
-        /* use s */
-    }                              // auto: String_deinit(&s)
-}
-```
+    impl Example {
+        void run(void) {
+            String s.init("hello");     // init-declaration: calls String_init(&s, "hello")
+            /* use s */
+        }                              // auto: String_deinit(&s)
+    }
+    ```
 
 A variable declared with init-declaration syntax must be of a type that has a
 `deinit` method. Calling `deinit` explicitly on such a variable is rejected
@@ -202,7 +202,7 @@ A variable declared with init-declaration syntax must be of a type that has a
 
 ```coda
 void run(void) {
-    String s("hello");
+    String s.init("hello");
     s.deinit();                    // ERROR (E070)
 }
 ```
@@ -245,7 +245,7 @@ ownership to the caller:
 
 ```coda
 struct String make(void) {
-    String s("hello");
+    String s.init("hello");
     return s;                      // s is not deinit'd — transfer to caller
 }
 ```
@@ -576,7 +576,7 @@ copies receive a `deinit` call at scope exit — a double-free.
 
 ```coda
 void run(void) {
-    String a("hello");
+    String a.init("hello");
     String b = a;   // bitwise copy
 }                   // String_deinit(&b), then String_deinit(&a) — double-free
 ```
@@ -594,7 +594,7 @@ move expression for non-return contexts.
 void consume(String s);
 
 void run(void) {
-    String s("hello");
+    String s.init("hello");
     consume(s);       // double-free: s deinit'd at scope exit,
 }                     // and consume deinit's its parameter
 ```
@@ -631,7 +631,7 @@ Usage integrates with scope cleanup:
 
 ```coda
 void run(void) {
-    OwnedPtr<String> p(malloc(sizeof(String)));
+    OwnedPtr<String> p.init(malloc(sizeof(String)));
     p->init("hello");
 }   // auto: OwnedPtr<String>_deinit(&p) → String_deinit + free
 ```
