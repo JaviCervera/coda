@@ -82,6 +82,27 @@ class TestParser(unittest.TestCase):
         impl = impls[0].body
         self.assertTrue(impl.methods[0].is_deinit)
 
+    def test_override_method(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void update(void) { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override void update(void) { }
+        }
+        """
+        module = self.parse(source)
+        impls = [d for d in module.top_level if d.kind == "impl"]
+        self.assertEqual(len(impls), 2)
+        base_impl = impls[0].body
+        derived_impl = impls[1].body
+        self.assertTrue(base_impl.methods[0].is_virtual)
+        self.assertFalse(base_impl.methods[0].is_override)
+        self.assertTrue(derived_impl.methods[0].is_override)
+        self.assertFalse(derived_impl.methods[0].is_virtual)
+
     def test_virtual_method(self):
         source = """
         struct Entity { int id; };

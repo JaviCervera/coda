@@ -165,7 +165,7 @@ class TestRuntime(unittest.TestCase):
         }
         struct Sprite : Entity { int x; };
         impl Sprite {
-            virtual void update(void) {
+            override void update(void) {
                 self->x = 2;
             }
         }

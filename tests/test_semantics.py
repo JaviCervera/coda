@@ -127,5 +127,65 @@ class TestSemantics(unittest.TestCase):
         self.assertTrue(info.methods["operator+"].is_operator)
 
 
+    def test_override_method_valid(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void update(void) { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override void update(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        info = analyzer.get_implementation("Sprite")
+        self.assertIn("update", info.methods)
+        self.assertTrue(info.methods["update"].is_override)
+        self.assertFalse(info.methods["update"].is_virtual)
+
+    def test_virtual_on_override_errors(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void update(void) { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            virtual void update(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E024", codes)
+
+    def test_missing_override_on_override_errors(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void update(void) { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            void update(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E026", codes)
+
+    def test_override_without_base_virtual_errors(self):
+        source = """
+        struct Entity { int id; };
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override void update(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E025", codes)
+
+
 if __name__ == "__main__":
     unittest.main()

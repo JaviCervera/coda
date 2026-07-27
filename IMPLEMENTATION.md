@@ -205,7 +205,7 @@ An `impl` body contains only method definitions. Its grammar is:
 
 ```text
 impl-body  := '{' method* '}'
-method               := ['virtual'] method-head compound-statement
+method               := ('virtual' | 'override')? method-head compound-statement
 method-head          := type identifier '(' parameter-list ')'
                       | 'init' '(' parameter-list ')'
                       | 'deinit' '(' 'void' ')'
@@ -284,7 +284,7 @@ Validate all of the following before emission:
 - the base field (`struct BaseName base;`) is injected as the first field during
   `_register_struct`; an explicit field named `base` in a struct that declares
   `: BaseName` is rejected (`E020`);
-- overridden virtual methods repeat `virtual` and have an exact signature match;
+- overridden virtual methods use `override` and have an exact signature match;
 - a non-virtual method may not replace an inherited virtual method;
 - no field/method/virtual name conflict;
 - no cyclic inheritance.
@@ -610,6 +610,9 @@ E020 invalid inheritance layout
 E021 foreign type cannot inherit or be virtual
 E022 inheritance cycle
 E023 invalid virtual override
+E024 use 'override' instead of 'virtual'
+E025 no virtual method to override
+E026 overriding method must use 'override' keyword
 E030 unknown method
 E031 invalid method receiver
 E032 invalid method argument list
@@ -717,7 +720,8 @@ for AST/semantic snapshots when parser failures need focused tests.
 - derived layout contains the base but no second vptr;
 - base vtable ordering is stable;
 - valid override emits thunk and derived static vtable;
-- invalid signature or missing `virtual` on override gives `E023`;
+- missing `override` on override gives `E026`;
+- `virtual` on override gives `E024`;
 - derived-only virtual slot extends, rather than replaces, base slots;
 - base-pointer call dispatches to a derived override at runtime;
 - derived initializer installs the derived vtable after any base initializer call.

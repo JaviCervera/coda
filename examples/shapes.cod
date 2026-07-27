@@ -41,7 +41,7 @@ impl Rectangle {
         self->height = height;
     }
 
-    virtual double area(void) {
+    override double area(void) {
         return self->width * self->height;
     }
 }

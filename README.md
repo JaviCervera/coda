@@ -14,7 +14,7 @@ compiler architecture and lowering strategy are documented in
 - **Construction / destruction** — explicit `init` / `deinit` (never implicit)
 - **Single inheritance** — `struct Rectangle : Shape { ... };` with
   auto-injected `struct Shape base;` field
-- **Virtual dispatch** — `virtual double area(void);` + override in derived
+- **Virtual dispatch** — `virtual double area(void);` + `override` in derived
 - **Operator overloading** — `struct Vec2 operator+(struct Vec2 rhs) { ... }`
 - **Templates** — `template<T> struct Array { ... }`
 - **Foreign struct extensions** — extra methods on C types via `foreign impl`
@@ -82,7 +82,7 @@ impl Rectangle {
         self->height = height;
     }
 
-    virtual double area(void) {
+    override double area(void) {
         return self->width * self->height;
     }
 }

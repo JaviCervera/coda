@@ -34,7 +34,7 @@ class LoweredMethod:
         self.c_name = c_name
         self.struct_name = struct_name
         self.sig = sig
-        self.is_virtual = sig.is_virtual
+        self.is_virtual = sig.is_virtual or sig.is_override
         self.impl_name = impl_c_name(struct_name, sig.name)
         self.thunk_name: str | None = None
         self.slot_name: str = sig.name
@@ -114,7 +114,7 @@ class Lowerer:
             if m.body_tokens:
                 ls.lowered_body = lower_method_body(m.body_tokens, struct_name, self.analyzer)
             self.methods[struct_name].append(ls)
-            if sig and sig.is_virtual:
+            if sig and (sig.is_virtual or sig.is_override):
                 self._register_virtual_slot(struct_name, sig, ls)
 
     def _register_virtual_slot(self, struct_name: str, sig: MethodSig, ls: LoweredMethod):
@@ -127,7 +127,7 @@ class Lowerer:
     def _compute_virtual_layouts(self):
         for struct_name, info in self.analyzer.implementations.items():
             if not info.virtual_slots and not any(
-                m.is_virtual for m in info.methods.values()
+                m.is_virtual or m.is_override for m in info.methods.values()
             ):
                 continue
 
@@ -145,7 +145,7 @@ class Lowerer:
                     self.structs[base_name].is_virtual_root = True
 
             for mname, msig in info.methods.items():
-                if msig.is_virtual and base_name and base_name in self.analyzer.implementations:
+                if (msig.is_virtual or msig.is_override) and base_name and base_name in self.analyzer.implementations:
                     base_info = self.analyzer.implementations[base_name]
                     if mname in base_info.methods and base_info.methods[mname].is_virtual:
                         cname = method_c_name(struct_name, mname)

@@ -28,6 +28,7 @@ class MethodSig:
     is_init: bool
     is_deinit: bool
     is_virtual: bool
+    is_override: bool
     is_operator: bool
     operator_token: str | None
     ast: Method | None = None
@@ -157,7 +158,8 @@ class SemanticAnalyzer:
         return MethodSig(
             name=name, result_type=result_type, param_types=param_types,
             is_init=m.is_init, is_deinit=m.is_deinit,
-            is_virtual=m.is_virtual, is_operator=m.is_operator,
+            is_virtual=m.is_virtual, is_override=m.is_override,
+            is_operator=m.is_operator,
             operator_token=m.operator_token, ast=m,
         )
 
@@ -174,14 +176,35 @@ class SemanticAnalyzer:
                 self._diag("E050", f"unsupported operator '{sig.name}'",
                            span=m.name_token.span)
 
-        if base_name and sig.is_virtual:
-            if base_name in self.implementations:
-                base = self.implementations[base_name]
-                if sig.name in base.methods:
-                    base_sig = base.methods[sig.name]
-                    if not base_sig.is_virtual:
+        if base_name and base_name in self.implementations:
+            base = self.implementations[base_name]
+            if sig.name in base.methods:
+                base_sig = base.methods[sig.name]
+                if base_sig.is_virtual:
+                    if sig.is_override:
+                        pass
+                    elif sig.is_virtual:
+                        self._diag("E024", f"use 'override' instead of 'virtual' for method '{sig.name}'",
+                                   span=m.name_token.span)
+                    else:
+                        self._diag("E026", f"overriding method '{sig.name}' must use 'override' keyword",
+                                   span=m.name_token.span)
+                else:
+                    if sig.is_virtual:
                         self._diag("E023", f"cannot override non-virtual method '{sig.name}'",
                                    span=m.name_token.span)
+                    elif sig.is_override:
+                        self._diag("E025", f"no virtual method '{sig.name}' to override",
+                                   span=m.name_token.span)
+            else:
+                if sig.is_override:
+                    self._diag("E025", f"no virtual method '{sig.name}' to override",
+                               span=m.name_token.span)
+        else:
+            if sig.is_override:
+                name = base_name if base_name else "(no base)"
+                self._diag("E025", f"no virtual method '{sig.name}' to override",
+                           span=m.name_token.span)
 
     def _diag(self, code: str, msg: str, span: Span | None = None):
         self.diagnostics.append(Diagnostic(code=code, message=msg, span=span))

@@ -378,9 +378,14 @@ class Parser:
 
     def _parse_one_method(self) -> Method | None:
         is_virtual = False
-        if self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "virtual":
-            is_virtual = True
-            self.tokens.advance()
+        is_override = False
+        if self.tokens.current and self.tokens.current.kind == "keyword":
+            if self.tokens.current.spelling == "virtual":
+                is_virtual = True
+                self.tokens.advance()
+            elif self.tokens.current.spelling == "override":
+                is_override = True
+                self.tokens.advance()
 
         is_init = False
         is_deinit = False
@@ -451,7 +456,8 @@ class Parser:
         params = self._parse_parameter_list()
         body_tokens = self._parse_method_body()
         return Method(
-            is_virtual=is_virtual, is_init=is_init, is_deinit=is_deinit,
+            is_virtual=is_virtual, is_override=is_override,
+            is_init=is_init, is_deinit=is_deinit,
             is_operator=is_operator, operator_token=operator_token,
             name_token=name_token, return_type_tokens=return_type_tokens,
             param_tokens=params, body_tokens=body_tokens,

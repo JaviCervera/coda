@@ -25,7 +25,7 @@ class TestLexer(unittest.TestCase):
             self.assertEqual(t.kind, "keyword")
 
     def test_coda_keywords(self):
-        sf = self.lex("impl virtual template operator interface")
+        sf = self.lex("impl virtual template operator interface override")
         for t in sf.tokens:
             self.assertEqual(t.kind, "keyword")
 

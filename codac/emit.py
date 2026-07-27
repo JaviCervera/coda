@@ -149,11 +149,11 @@ class Emitter:
                     lines.append("{\n")
                     lines.append("    (void)self;\n")
                     body = self._get_body_text(struct_name, lm)
-                    if body:
-                        lines.append(body)
-                        if not body.endswith("\n"):
-                            lines.append("\n")
-                    else:
+                    if body is not None:
+                        if body:
+                            lines.append(body)
+                            if not body.endswith("\n"):
+                                lines.append("\n")
                         arg_names = ["self"]
                         for pt in lm.sig.param_types:
                             if pt == "void":

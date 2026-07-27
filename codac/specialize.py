@@ -121,7 +121,8 @@ class Specializer:
                 else:
                     new_body.append(t)
             new_methods.append(Method(
-                is_virtual=m.is_virtual, is_init=m.is_init, is_deinit=m.is_deinit,
+                is_virtual=m.is_virtual, is_override=m.is_override,
+                is_init=m.is_init, is_deinit=m.is_deinit,
                 is_operator=m.is_operator, operator_token=m.operator_token,
                 name_token=m.name_token, return_type_tokens=m.return_type_tokens,
                 param_tokens=m.param_tokens, body_tokens=new_body,

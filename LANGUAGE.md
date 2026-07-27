@@ -308,8 +308,8 @@ inheritance, mixin system, or implicit base-constructor call. The inherited
 
 ## Virtual methods
 
-Mark an instance method `virtual` to introduce or override a virtual dispatch
-slot.
+Mark an instance method `virtual` to introduce a new virtual dispatch slot.
+Mark an instance method `override` to override an inherited virtual slot.
 
 ```coda
 struct Entity {
@@ -327,7 +327,7 @@ struct Sprite : Entity {
 };
 
 impl Sprite {
-    virtual void update(void) {
+    override void update(void) {
         self->x++;
     }
 }
@@ -345,7 +345,9 @@ void tick(struct Entity *entity) {
 
 Rules:
 
-- A virtual override repeats `virtual` and must match the base signature exactly.
+- A method that introduces a new virtual dispatch slot uses `virtual`.
+- A method that overrides an inherited virtual slot uses `override` and must
+  match the base signature exactly.
 - A derived type may add new virtual methods; its generated vtable extends the
   base vtable.
 - A virtual method may be declared only on a Coda-owned struct hierarchy.

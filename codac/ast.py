@@ -48,6 +48,7 @@ class StructDecl:
 @dataclasses.dataclass
 class Method:
     is_virtual: bool
+    is_override: bool
     is_init: bool
     is_deinit: bool
     is_operator: bool
