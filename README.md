@@ -11,7 +11,7 @@ compiler architecture and lowering strategy are documented in
 ## Features
 
 - **Struct methods** — `impl Point { void move(...) { ... } }`
-- **Construction / destruction** — explicit `init` / `deinit` (never implicit)
+- **Construction / destruction** — explicit `init` / `deinit`; automatic scope cleanup via `Type var.init(...)` syntax
 - **Single inheritance** — `struct Rectangle : Shape { ... };` with
   auto-injected `struct Shape base;` field
 - **Virtual dispatch** — `virtual double area(void);` + `override` in derived
