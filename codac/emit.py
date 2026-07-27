@@ -149,9 +149,6 @@ class Emitter:
                     lines.append("{\n")
                     lines.append("    (void)self;\n")
                     ls = lowerer.structs.get(struct_name)
-                    if lm.sig.is_init and ls and ls.has_vtable:
-                        vptr = self._vptr_path(struct_name)
-                        lines.append(f"    {vptr} = &{vtable_instance_name(struct_name)};\n")
                     arg_names = ["self"]
                     for pt in lm.sig.param_types:
                         if pt == "void":
@@ -159,7 +156,11 @@ class Emitter:
                         parts = pt.split()
                         if parts:
                             arg_names.append(parts[-1])
-                    lines.append(f"    return {lm.impl_name}({', '.join(arg_names)});\n")
+                    if lm.sig.is_init and ls and ls.has_vtable:
+                        lines.append(f"    {lm.impl_name}({', '.join(arg_names)});\n")
+                        lines.append(f"    {self._vptr_path(struct_name)} = &{vtable_instance_name(struct_name)};\n")
+                    else:
+                        lines.append(f"    return {lm.impl_name}({', '.join(arg_names)});\n")
                     lines.append("}\n\n")
 
         for thunk_name, struct_name, mname, base_name in lowerer.virtual_layout.thunks:
