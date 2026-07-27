@@ -27,7 +27,7 @@ class Emitter:
         self.analyzer = analyzer
 
         module_name = os.path.splitext(os.path.basename(module.path))[0]
-        guard = include_guard(module.path)
+        guard = include_guard(os.path.basename(module.path))
 
         h_lines: list[str] = []
         c_lines: list[str] = []
