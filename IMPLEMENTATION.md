@@ -194,6 +194,10 @@ impl [struct] Name impl-body
 struct Identifier [: BaseName] { field* }
 ```
 
+Every Coda-owned struct name is automatically a type name, usable without
+the `struct` keyword anywhere in Coda source. The `struct` keyword form
+(`struct Name`) is also accepted for compatibility.
+
 A struct with `: BaseName` declares single inheritance. Coda injects
 `struct BaseName base;` as the first field during semantic registration.
 
@@ -345,7 +349,8 @@ distinct canonical types would otherwise mangle to the same identifier.
 ### 9.1 Non-virtual structs
 
 For a Coda-owned struct with no virtual methods in its inheritance chain, emit
-the declared fields unchanged.
+the declared fields unchanged, followed by a typedef that makes the tag name
+available as a bare type name.
 
 ```coda
 struct Point { int x; int y; };
@@ -353,6 +358,7 @@ struct Point { int x; int y; };
 
 ```c
 struct Point { int x; int y; };
+typedef struct Point Point;
 ```
 
 ### 9.2 Virtual root and derived layouts
@@ -575,7 +581,7 @@ For every `foo.cod`, emit `foo.h` and `foo.c`.
 2. translated C includes and imported generated headers;
 3. forward declarations needed to break pointer-only cycles;
 4. generated vtable types;
-5. generated struct definitions;
+5. generated struct definitions, each followed by `typedef struct Name Name;`;
 6. generated public method declarations;
 7. template specialization declarations owned by the module.
 

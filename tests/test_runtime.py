@@ -181,5 +181,24 @@ class TestRuntime(unittest.TestCase):
         """)
 
 
+    def test_bare_struct_compiles(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            init(void) { self->x = 0; self->y = 0; }
+        }
+        struct Shape {
+            Point origin;
+        };
+        impl Shape {
+            void reset(void) {
+                self->origin.x = 0;
+                self->origin.y = 0;
+            }
+        }
+        """
+        self._compile(source)
+
+
 if __name__ == "__main__":
     unittest.main()

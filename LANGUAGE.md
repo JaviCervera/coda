@@ -64,6 +64,47 @@ struct Point {
 Fields are public. Coda 0.1 has no access modifiers, properties, or hidden heap
 allocation.
 
+### Type names
+
+Every Coda-owned struct name is automatically a type name, as if declared
+with `typedef`. The struct tag name is usable without the `struct` keyword
+anywhere in Coda source, including field declarations, pointer declarators,
+array declarators, function parameters, and local variable declarations.
+
+```coda
+struct Point { int x; int y; };
+struct Vec2 { int x; int y; };
+
+struct Rect {
+    Point origin;        // 'struct' omitted — valid
+    Vec2 size;           // pointer and array declarators also valid
+};
+
+impl Rect {
+    void scale(double factor) {
+        Rect *ptr;       // pointer declarator
+        Point corners[4];// array declarator
+    }
+}
+```
+
+The `struct` keyword form (`struct Point origin;`) is also accepted for
+compatibility.
+
+Generated C output includes a `typedef` for each Coda-owned struct, making
+the bare tag name available in C code that includes the generated header:
+
+```c
+/* generated */
+struct Point { int x; int y; };
+typedef struct Point Point;
+```
+
+A declaration that starts with a known Coda struct name but uses a complex
+declarator (pointer, array, or function-pointer form) has no scope-cleanup
+injection for that variable. The simple forms `Type var;` and
+`Type var.init(...)` remain the only ways to obtain automatic cleanup.
+
 ## Implementations and instance methods
 
 An `impl` block attaches methods to a struct.

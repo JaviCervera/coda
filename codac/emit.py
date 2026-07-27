@@ -74,7 +74,8 @@ class Emitter:
                     ft = field.type_str.rstrip(";").strip()
                     if ft:
                         lines.append(f"    {ft};\n")
-                lines.append("};\n\n")
+                lines.append("};\n")
+                lines.append(f"typedef struct {struct_name} {struct_name};\n\n")
 
         for struct_name in sorted(self._get_vtable_types(module, lowerer)):
             lines.append(f"struct {vtable_type_name(struct_name)} {{\n")

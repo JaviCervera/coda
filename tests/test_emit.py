@@ -73,6 +73,7 @@ class TestEmit(unittest.TestCase):
         self.assertIn("struct Point", h)
         self.assertIn("int x", h)
         self.assertIn("int y", h)
+        self.assertIn("typedef struct Point Point;", h)
 
     def test_method_declaration(self):
         source = """
@@ -316,6 +317,69 @@ class TestEmit(unittest.TestCase):
         h2, c2 = self.emit_source(source, "test1")
         self.assertEqual(h1, h2)
         self.assertEqual(c1, c2)
+
+
+    def test_typedef_for_inherited_struct(self):
+        h, c = self.emit_source("""
+        struct Entity { int id; };
+        struct Sprite : Entity { int x; };
+        """)
+        self.assertIn("typedef struct Entity Entity;", h)
+        self.assertIn("typedef struct Sprite Sprite;", h)
+
+    def test_bare_struct_field_decl(self):
+        source = """
+        struct Point { int x; int y; };
+        struct Shape {
+            Point origin;
+            struct Point pos;
+        };
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Point origin;", h)
+        self.assertIn("struct Point pos;", h)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_bare_struct_name_in_method_body(self):
+        source = """
+        struct Point { int x; int y; };
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Point p;
+                Point *ptr;
+                Point arr[4];
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_pointer_decl_passthrough(self):
+        source = """
+        struct Point { int x; int y; };
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Point *ptr;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_array_decl_passthrough(self):
+        source = """
+        struct Point { int x; int y; };
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Point corners[4];
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
 
 if __name__ == "__main__":

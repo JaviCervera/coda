@@ -16,7 +16,7 @@ impl Point {
 }
 
 struct Shape {
-    struct Point origin;
+    Point origin;
 };
 
 impl Shape {
@@ -57,8 +57,8 @@ impl Vec2 {
         self->y = y;
     }
 
-    struct Vec2 operator+(struct Vec2 rhs) {
-        struct Vec2 result;
+    Vec2 operator+(Vec2 rhs) {
+        Vec2 result;
         result.x = self->x + rhs.x;
         result.y = self->y + rhs.y;
         return result;

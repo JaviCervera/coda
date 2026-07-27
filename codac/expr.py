@@ -172,7 +172,19 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
 
     has_init = False
     init_tokens: list[Token] = []
-    if c.peek_spelling() == ".":
+
+    next_spelling = c.peek_spelling()
+
+    if next_spelling == ";":
+        c.advance()
+        return Stmt(
+            kind="vardecl", tokens=[],
+            var_name=var_name, var_type=type_name,
+            has_init_call=False,
+            var_init_arg_tokens=[],
+        )
+
+    if next_spelling == ".":
         c.advance()
         if c.peek() and c.peek().kind == "identifier" and c.peek().spelling == "init":
             c.advance()
@@ -188,22 +200,19 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
                         depth -= 1
                         if depth == 0:
                             break
-            else:
-                c.pos = saved
-                return None
-        else:
-            c.pos = saved
-            return None
+                if c.peek_spelling() == ";":
+                    c.advance()
+                return Stmt(
+                    kind="vardecl", tokens=[],
+                    var_name=var_name, var_type=type_name,
+                    has_init_call=True,
+                    var_init_arg_tokens=init_tokens,
+                )
+        c.pos = saved
+        return None
 
-    if c.peek_spelling() == ";":
-        c.advance()
-
-    return Stmt(
-        kind="vardecl", tokens=[],
-        var_name=var_name, var_type=type_name,
-        has_init_call=has_init,
-        var_init_arg_tokens=init_tokens,
-    )
+    c.pos = saved
+    return None
 
 
 def _parse_stmts(tokens: list[Token], type_names: frozenset[str] = frozenset()) -> list[Stmt]:
@@ -237,17 +246,37 @@ def _parse_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt | N
         saved = c.pos
         if t.spelling in type_names:
             c.advance()
-            if c.peek() and c.peek().kind == "identifier":
+            next_tok = c.peek()
+
+            if next_tok and next_tok.kind == "identifier":
                 c.pos = saved
-                return _parse_coda_declaration(c, type_names)
+                result = _parse_coda_declaration(c, type_names)
+                if result is not None:
+                    return result
+                c.pos = saved
+                return _parse_raw_until_semicolon(c)
+
+            if next_tok and next_tok.spelling in ("*", "[", "("):
+                c.pos = saved
+                return _parse_raw_until_semicolon(c)
+
             c.pos = saved
+
         elif t.spelling == "struct":
             c.advance()
             if c.peek() and c.peek().kind == "identifier" and c.peek().spelling in type_names:
                 c.advance()
-                if c.peek() and c.peek().kind == "identifier":
+                with_struct_type_name = c.peek()
+                c.pos = saved
+                if with_struct_type_name and with_struct_type_name.kind == "identifier":
+                    result = _parse_coda_declaration(c, type_names)
+                    if result is not None:
+                        return result
                     c.pos = saved
-                    return _parse_coda_declaration(c, type_names)
+                    return _parse_raw_until_semicolon(c)
+                if with_struct_type_name and with_struct_type_name.spelling in ("*", "[", "("):
+                    c.pos = saved
+                    return _parse_raw_until_semicolon(c)
             c.pos = saved
 
     return _parse_expr_stmt(c, type_names)
