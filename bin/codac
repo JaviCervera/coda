@@ -1,0 +1,4 @@
+#!/bin/sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}" exec python -m codac "$@"
