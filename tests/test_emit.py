@@ -97,8 +97,8 @@ class TestEmit(unittest.TestCase):
         }
         """
         h, c = self.emit_source(source)
-        self.assertIn("coda_Point_move_impl", c)
-        self.assertIn("Point_move", c)
+        self.assertIn("void Point_move(struct Point *self, int dx, int dy)", c)
+        self.assertNotIn("coda_Point_move_impl", c)
 
     def test_init_generated(self):
         source = """
