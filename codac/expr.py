@@ -154,6 +154,11 @@ def _parse_prefix(c: Cursor) -> Expr | None:
 def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | None:
     saved = c.pos
     type_tokens: list[Token] = []
+    var_is_const = False
+
+    if c.peek_spelling() == "const":
+        var_is_const = True
+        type_tokens.append(c.advance())
 
     if c.peek_spelling() in ("struct", "union"):
         type_tokens.append(c.advance())
@@ -164,6 +169,10 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
     type_token = c.advance()
     type_name = type_token.spelling
     type_tokens.append(type_token)
+
+    if type_name not in type_names:
+        c.pos = saved
+        return None
 
     if not c.peek() or c.peek().kind != "identifier":
         c.pos = saved
@@ -183,6 +192,7 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
             var_name=var_name, var_type=type_name,
             has_init_call=False,
             var_init_arg_tokens=[],
+            var_is_const=var_is_const,
         )
 
     if next_spelling == ".":
@@ -208,6 +218,7 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
                     var_name=var_name, var_type=type_name,
                     has_init_call=True,
                     var_init_arg_tokens=init_tokens,
+                    var_is_const=var_is_const,
                 )
         c.pos = saved
         return None
@@ -222,6 +233,7 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
             has_init_call=False,
             var_init_arg_tokens=[],
             var_init_expr=init_expr,
+            var_is_const=var_is_const,
         )
 
     c.pos = saved
@@ -252,6 +264,11 @@ def _parse_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt | N
         return _parse_raw_until_semicolon_or_brace(c)
 
     if c.peek_spelling() in DECL_KEYWORDS:
+        saved = c.pos
+        result = _parse_coda_declaration(c, type_names)
+        if result is not None:
+            return result
+        c.pos = saved
         return _parse_raw_until_semicolon(c)
 
     t = c.peek()
@@ -362,12 +379,12 @@ def _parse_expr_raw(tokens: list[Token]) -> Expr | None:
     return _parse_expr(c, 0)
 
 
-def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, str]:
-    var_info: dict[str, str] = {}
+def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, tuple[str, bool]]:
+    var_info: dict[str, tuple[str, bool]] = {}
     def walk(stmts: list[Stmt]):
         for s in stmts:
             if s.kind == "vardecl" and s.var_name and s.var_type:
-                var_info[s.var_name] = s.var_type
+                var_info[s.var_name] = (s.var_type, s.var_is_const)
             for c in s.children:
                 walk([c])
     walk(stmts)
@@ -375,7 +392,7 @@ def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, 
 
 
 def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
-                var_info: dict[str, str] | None = None) -> Expr:
+                var_info: dict[str, tuple[str, bool]] | None = None) -> Expr:
     expr.children = [_lower_expr(c, current_struct, analyzer, var_info) for c in expr.children]
 
     if expr.kind == "call" and len(expr.children) >= 1:
@@ -387,10 +404,10 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
                 if method_name == "deinit" and callee.kind == "member":
                     if var_info:
                         recv_name = receiver.value if receiver.value else ""
-                        if recv_name in var_info and analyzer.has_deinit(var_info[recv_name]):
+                        if recv_name in var_info and analyzer.has_deinit(var_info[recv_name][0]):
                             analyzer.diagnostics.append(Diagnostic(
                                 code="E070",
-                                message=f"explicit deinit() on automatic variable of type '{var_info[recv_name]}' which has scope cleanup",
+                                message=f"explicit deinit() on automatic variable of type '{var_info[recv_name][0]}' which has scope cleanup",
                                 span=expr.token.span if expr.token and expr.token.span else None,
                             ))
                             return expr
@@ -402,6 +419,10 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
                     new_children: list[Expr] = []
                     if callee.kind == "member":
                         addr = Expr(kind="unary", token=Token("punctuator", "&", None), children=[receiver])
+                        recv_name = receiver.value if receiver.value else ""
+                        recv_is_const = var_info and recv_name in var_info and var_info[recv_name][1]
+                        if recv_is_const and not sig.is_const:
+                            addr = Expr(kind="cast", token=Token("identifier", f"struct {struct_name} *", None), children=[addr])
                         new_children.append(addr)
                     else:
                         new_children.append(receiver)
@@ -444,7 +465,7 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
 
 
 def _resolve_method(method_name: str, receiver: Expr, current_struct: str, analyzer: SemanticAnalyzer,
-                    var_info: dict[str, str] | None = None):
+                    var_info: dict[str, tuple[str, bool]] | None = None):
     target_type = _resolve_type(receiver, current_struct, analyzer, var_info)
     if target_type:
         impl = analyzer.get_implementation(target_type)
@@ -454,12 +475,12 @@ def _resolve_method(method_name: str, receiver: Expr, current_struct: str, analy
 
 
 def _resolve_type(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
-                  var_info: dict[str, str] | None = None) -> str | None:
+                  var_info: dict[str, tuple[str, bool]] | None = None) -> str | None:
     if expr.kind in ("identifier", "ident") and expr.value == "self":
         return current_struct
 
     if expr.kind in ("identifier", "ident") and var_info and expr.value in var_info:
-        return var_info[expr.value]
+        return var_info[expr.value][0]
 
     if expr.kind == "arrow":
         inner = expr.children[0] if expr.children else None
@@ -549,6 +570,8 @@ def _emit_expr(expr: Expr | None) -> str:
         return f"{lhs} {expr.token.spelling} {rhs}"
     if expr.kind == "sizeof":
         return "sizeof"
+    if expr.kind == "cast":
+        return f"({expr.token.spelling}){_emit_expr(expr.children[0]) if expr.children else ''}"
     return expr.token.spelling
 
 
@@ -556,19 +579,26 @@ def _emit_stmt(stmt: Stmt) -> str:
     if stmt.kind == "vardecl":
         type_name = stmt.var_type or ""
         var_name = stmt.var_name or ""
+        const_prefix = "const " if stmt.var_is_const else ""
         if stmt.has_init_call and stmt.var_init_arg_tokens:
             inner = stmt.var_init_arg_tokens
             if len(inner) >= 2 and inner[0].spelling == "(" and inner[-1].spelling == ")":
                 inner = inner[1:-1]
             arg_text = "".join(t.leading_trivia + t.spelling for t in inner).strip()
-            return f"struct {type_name} {var_name};\n{type_name}_init(&{var_name}{', ' + arg_text if arg_text else ''});"
+            init_call = f"{type_name}_init(&{var_name}{', ' + arg_text if arg_text else ''});"
+            if stmt.var_is_const:
+                init_call = f"{type_name}_init((struct {type_name} *)&{var_name}{', ' + arg_text if arg_text else ''});"
+            init_suffix = " = {0}" if stmt.var_is_const else ""
+            return f"{const_prefix}struct {type_name} {var_name}{init_suffix};\n{init_call}"
         if stmt.var_init_expr:
-            return f"struct {type_name} {var_name} = {_emit_expr(stmt.var_init_expr)};"
-        return f"struct {type_name} {var_name} = {{0}};"
+            return f"{const_prefix}struct {type_name} {var_name} = {_emit_expr(stmt.var_init_expr)};"
+        return f"{const_prefix}struct {type_name} {var_name} = {{0}};"
 
     if stmt.kind == "deinit_call":
         var_name = stmt.var_name or ""
         type_name = stmt.var_type or ""
+        if stmt.var_is_const:
+            return f"{type_name}_deinit((struct {type_name} *)&{var_name});"
         return f"{type_name}_deinit(&{var_name});"
 
     if stmt.kind == "expr_stmt":
@@ -611,14 +641,14 @@ def _emit_stmt(stmt: Stmt) -> str:
 
 
 def _analyze_scope(stmts: list[Stmt], analyzer: SemanticAnalyzer):
-    scope_map: dict[int, list[tuple[str, str]]] = {}
+    scope_map: dict[int, list[tuple[str, str, bool]]] = {}
 
-    def collect_block_vars(stmts: list[Stmt]) -> list[tuple[str, str]]:
-        vars_in_scope: list[tuple[str, str]] = []
+    def collect_block_vars(stmts: list[Stmt]) -> list[tuple[str, str, bool]]:
+        vars_in_scope: list[tuple[str, str, bool]] = []
         for stmt in stmts:
             if stmt.kind == "vardecl" and stmt.var_name and stmt.var_type:
                 if analyzer.has_deinit(stmt.var_type):
-                    vars_in_scope.append((stmt.var_name, stmt.var_type))
+                    vars_in_scope.append((stmt.var_name, stmt.var_type, stmt.var_is_const))
             if stmt.kind == "block":
                 block_vars = collect_block_vars(stmt.children)
                 if block_vars:
@@ -635,8 +665,8 @@ def _extract_returned_var(expr: Expr | None) -> str | None:
     return None
 
 
-def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[str, str]] | None = None) -> list[Stmt]:
-    scope_stack: list[list[tuple[str, str]]] = [root_vars] if root_vars else []
+def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[str, str, bool]] | None = None) -> list[Stmt]:
+    scope_stack: list[list[tuple[str, str, bool]]] = [root_vars] if root_vars else []
 
     def walk(stmts: list[Stmt]) -> list[Stmt]:
         new_stmts: list[Stmt] = []
@@ -646,24 +676,26 @@ def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[st
                 block_vars = scope_map.get(block_id, [])
                 scope_stack.append(block_vars)
                 stmt.children = walk(stmt.children)
-                for var_name, type_name in reversed(block_vars):
+                for var_name, type_name, is_const in reversed(block_vars):
                     stmt.children.append(Stmt(
                         kind="deinit_call", tokens=[],
                         var_name=var_name, var_type=type_name,
+                        var_is_const=is_const,
                     ))
                 scope_stack.pop()
                 new_stmts.append(stmt)
 
             elif stmt.kind == "return_stmt":
                 returned_var = _extract_returned_var(stmt.expr)
-                all_vars: list[tuple[str, str]] = []
+                all_vars: list[tuple[str, str, bool]] = []
                 for scope in scope_stack:
                     all_vars.extend(scope)
-                for var_name, type_name in reversed(all_vars):
+                for var_name, type_name, is_const in reversed(all_vars):
                     if var_name != returned_var:
                         new_stmts.append(Stmt(
                             kind="deinit_call", tokens=[],
                             var_name=var_name, var_type=type_name,
+                            var_is_const=is_const,
                         ))
                 new_stmts.append(stmt)
 
@@ -675,7 +707,7 @@ def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[st
 
 
 def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer,
-                var_info: dict[str, str] | None = None) -> Stmt:
+                var_info: dict[str, tuple[str, bool]] | None = None) -> Stmt:
     if stmt.expr:
         stmt.expr = _lower_expr(stmt.expr, current_struct, analyzer, var_info)
 
@@ -712,11 +744,12 @@ def lower_method_body(tokens: list[Token], struct_name: str, analyzer: SemanticA
             returned_var = _extract_returned_var(s.expr)
             break
 
-    for var_name, type_name in reversed(root_vars):
+    for var_name, type_name, is_const in reversed(root_vars):
         if var_name != returned_var:
             stmts.append(Stmt(
                 kind="deinit_call", tokens=[],
                 var_name=var_name, var_type=type_name,
+                var_is_const=is_const,
             ))
 
     parts: list[str] = []

@@ -209,5 +209,57 @@ class TestRuntime(unittest.TestCase):
         self._compile(source)
 
 
+    def test_const_method_compiles(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            init(int x, int y) { self->x = x; self->y = y; }
+            int get_x(void) const { return self->x; }
+        }
+        """
+        self._compile(source)
+
+    def test_const_init_decl_compiles(self):
+        source = """
+        struct Message { char msg[64]; };
+        impl Message {
+            init(const char *msg) { self->msg[0] = msg[0]; }
+            deinit(void) { }
+            void print(void) const { }
+        }
+        """
+        self._compile(source)
+
+    def test_const_var_nonconst_method_compiles(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            init(int x, int y) { self->x = x; self->y = y; }
+            int get_x(void) { return self->x; }
+        }
+        """
+        self._compile(source)
+
+    def test_const_method_runtime(self):
+        source = """
+        struct Counter { int val; };
+        impl Counter {
+            init(int v) { self->val = v; }
+            deinit(void) { }
+            int get(void) const { return self->val; }
+        }
+        """
+        c_helpers = """
+        """
+        test_main = """
+        struct Counter c;
+        Counter_init(&c, 42);
+        int result = Counter_get(&c);
+        Counter_deinit(&c);
+        if (result != 42) return 1;
+        """
+        self._compile_and_run(source, c_helpers, test_main)
+
+
 if __name__ == "__main__":
     unittest.main()

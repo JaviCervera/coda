@@ -52,6 +52,7 @@ class Method:
     is_init: bool
     is_deinit: bool
     is_operator: bool
+    is_const: bool
     operator_token: Optional[str]
     name_token: Token
     return_type_tokens: list[Token]
@@ -93,6 +94,7 @@ class Stmt:
     has_init_call: bool = False
     var_init_arg_tokens: list[Token] = dataclasses.field(default_factory=list)
     var_init_expr: Optional[Expr] = None
+    var_is_const: bool = False
 
 
 @dataclasses.dataclass

@@ -732,5 +732,99 @@ class TestEmit(unittest.TestCase):
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
 
+    def test_const_method_declaration(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            int get_x(void) const { return self->x; }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("int Point_get_x(const struct Point *self)", h)
+        self.assertIn("int Point_get_x(const struct Point *self)", c)
+        self.assertIn("const struct Point *self", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_const_init_declaration(self):
+        source = """
+        struct Message { char msg[64]; };
+        impl Message {
+            init(const char *msg) { }
+            deinit(void) { }
+            void print(void) const { }
+        }
+        int main() {
+            const Message msg.init("hello");
+            msg.print();
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("const struct Message msg", c)
+        self.assertIn("Message_init((struct Message *)&msg, \"hello\")", c)
+        self.assertIn("Message_print(&msg)", c)
+        self.assertIn("Message_deinit((struct Message *)&msg)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_const_init_decl_no_deinit(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            init(int x, int y) { }
+            int get_x(void) const { return self->x; }
+        }
+        int main() {
+            const Point p.init(1, 2);
+            p.get_x();
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("const struct Point p", c)
+        self.assertIn("Point_init((struct Point *)&p, 1, 2)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_const_method_on_nonconst_var(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            init(int x, int y) { }
+            int get_x(void) const { return self->x; }
+            void set_x(int x) { self->x = x; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Point p.init(1, 2);
+                p.get_x();
+                p.set_x(3);
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Point_get_x(&p)", c)
+        self.assertIn("Point_set_x(&p, 3)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_const_var_nonconst_method_cast(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            init(int x, int y) { }
+            int get_x(void) { return self->x; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                const Point p.init(1, 2);
+                p.get_x();
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Point_get_x((struct Point *)&p)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

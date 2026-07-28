@@ -15,13 +15,13 @@ impl Message {
         puts("Message deinit");
     }
 
-    void print() {
+    void print() const {
         puts(self->msg);
     }
 }
 
 int main() {
-    Message msg.init("hello");
+    const Message msg.init("hello");
     msg.print();
     return 0;
 }

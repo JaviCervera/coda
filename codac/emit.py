@@ -235,7 +235,8 @@ class Emitter:
         return "void"
 
     def _format_params(self, lm: LoweredMethod, struct_name: str) -> str:
-        parts = [f"struct {struct_name} *self"]
+        self_prefix = "const " if lm.sig.is_const else ""
+        parts = [f"{self_prefix}struct {struct_name} *self"]
         for pt in lm.sig.param_types:
             if pt == "void":
                 continue

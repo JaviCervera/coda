@@ -30,6 +30,7 @@ class MethodSig:
     is_virtual: bool
     is_override: bool
     is_operator: bool
+    is_const: bool
     operator_token: str | None
     ast: Method | None = None
 
@@ -158,7 +159,7 @@ class SemanticAnalyzer:
             name=name, result_type=result_type, param_types=param_types,
             is_init=m.is_init, is_deinit=m.is_deinit,
             is_virtual=m.is_virtual, is_override=m.is_override,
-            is_operator=m.is_operator,
+            is_operator=m.is_operator, is_const=m.is_const,
             operator_token=m.operator_token, ast=m,
         )
 

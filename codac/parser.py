@@ -469,6 +469,7 @@ class Parser:
         is_init = False
         is_deinit = False
         is_operator = False
+        is_const = False
         operator_token: str | None = None
         name_token: Token | None = None
 
@@ -533,11 +534,23 @@ class Parser:
         return_type_tokens = all_head_tokens
 
         params = self._parse_parameter_list()
+
+        if self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "const":
+            is_const = True
+            if is_init or is_deinit:
+                self.diagnostics.append(Diagnostic(
+                    code="E013",
+                    message=f"'{'init' if is_init else 'deinit'}' cannot be declared 'const'",
+                    span=self.tokens.current.span,
+                ))
+            self.tokens.advance()
+
         body_tokens = self._parse_method_body()
         return Method(
             is_virtual=is_virtual, is_override=is_override,
             is_init=is_init, is_deinit=is_deinit,
-            is_operator=is_operator, operator_token=operator_token,
+            is_operator=is_operator, is_const=is_const,
+            operator_token=operator_token,
             name_token=name_token, return_type_tokens=return_type_tokens,
             param_tokens=params, body_tokens=body_tokens,
         )
