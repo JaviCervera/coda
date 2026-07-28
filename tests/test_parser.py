@@ -82,6 +82,19 @@ class TestParser(unittest.TestCase):
         impl = impls[0].body
         self.assertTrue(impl.methods[0].is_deinit)
 
+    def test_implementation_with_deinit_empty_parens(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            deinit() { }
+        }
+        """
+        module = self.parse(source)
+        impls = [d for d in module.top_level if d.kind == "impl"]
+        self.assertGreaterEqual(len(impls), 1)
+        impl = impls[0].body
+        self.assertTrue(impl.methods[0].is_deinit)
+
     def test_override_method(self):
         source = """
         struct Entity { int id; };

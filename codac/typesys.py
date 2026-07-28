@@ -167,7 +167,7 @@ class SemanticAnalyzer:
         if sig.is_init and sig.param_types and sig.param_types[0] == "void":
             pass
         if sig.is_deinit:
-            if not (len(sig.param_types) == 1 and sig.param_types[0] == "void"):
+            if not (len(sig.param_types) == 0 or (len(sig.param_types) == 1 and sig.param_types[0] == "void")):
                 self._diag("E013", f"deinit must have (void) signature",
                            span=m.name_token.span)
 

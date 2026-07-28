@@ -97,6 +97,15 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile(source)
 
+    def test_deinit_empty_parens_compiles(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            deinit() { }
+        }
+        """
+        self._compile(source)
+
     def test_inheritance_compiles(self):
         source = """
         struct Entity { int id; };

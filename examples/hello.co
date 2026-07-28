@@ -11,7 +11,7 @@ impl Message {
         strncpy(self->msg, msg, 63);
     }
 
-    deinit(void) {
+    deinit() {
         puts("Message deinit");
     }
 

@@ -212,7 +212,7 @@ impl-body  := '{' method* '}'
 method               := ('virtual' | 'override')? method-head compound-statement
 method-head          := type identifier '(' parameter-list ')'
                       | 'init' '(' parameter-list ')'
-                      | 'deinit' '(' 'void' ')'
+                      | 'deinit' '(' [ 'void' ] ')'
                       | type 'operator' operator-token '(' parameter-list ')'
 ```
 
@@ -280,7 +280,7 @@ Validate all of the following before emission:
 - no duplicate method names or overloads;
 - no method name collides with a field name;
 - `init` has no declared result type;
-- `deinit` has exactly `(void)` and no result type;
+- `deinit` has no result type and its parameter list is `()` or `(void)`;
 - method parameter names are unique;
 - no default arguments;
 - an inheritance base exists, is Coda-owned, and is not final (there is no `final`

@@ -52,6 +52,17 @@ class TestSemantics(unittest.TestCase):
         info = analyzer.get_implementation("Point")
         self.assertTrue(info.methods["deinit"].is_deinit)
 
+    def test_deinit_method_empty_parens(self):
+        source = """
+        struct Point { int x; int y; };
+        impl Point {
+            deinit() { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        info = analyzer.get_implementation("Point")
+        self.assertTrue(info.methods["deinit"].is_deinit)
+
     def test_virtual_method_registered(self):
         source = """
         struct Entity { int id; };
