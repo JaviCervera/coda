@@ -96,10 +96,13 @@ class Stmt:
 
 @dataclasses.dataclass
 class TopLevelDecl:
-    kind: str  # "include", "import", "struct", "implementation", "template", "preserved"
+    kind: str  # "include", "import", "struct", "implementation", "template", "preserved", "function"
     token: Token
     body: Optional[Union[Import, StructDecl, Implementation, TemplateDecl]] = None
     preserved_tokens: list[Token] = dataclasses.field(default_factory=list)
+    head_tokens: list[Token] = dataclasses.field(default_factory=list)
+    body_tokens: list[Token] = dataclasses.field(default_factory=list)
+    lowered_body: str | None = None
     is_foreign: bool = False
 
 

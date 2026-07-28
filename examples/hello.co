@@ -1,0 +1,27 @@
+#include <stdio.h>
+#include <string.h>
+
+struct Message {
+    char msg[64];
+};
+
+impl Message {
+    init(const char *msg) {
+        puts("Message init");
+        strncpy(self->msg, msg, 63);
+    }
+
+    deinit(void) {
+        puts("Message deinit");
+    }
+
+    void print() {
+        puts(self->msg);
+    }
+}
+
+int main() {
+    Message msg.init("hello");
+    msg.print();
+    return 0;
+}

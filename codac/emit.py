@@ -98,6 +98,23 @@ class Emitter:
         lines.append(f'#include "{module_name}.h"\n\n')
 
         for decl in module.top_level:
+            if decl.kind == "function":
+                for t in decl.head_tokens:
+                    lines.append(t.leading_trivia)
+                    lines.append(t.spelling)
+                if decl.body_tokens:
+                    lines.append(" {\n")
+                    if decl.lowered_body:
+                        lines.append(decl.lowered_body)
+                    else:
+                        for t in decl.body_tokens:
+                            lines.append(t.leading_trivia)
+                            lines.append(t.spelling)
+                        lines.append("\n")
+                    lines.append("}\n\n")
+                else:
+                    lines.append("\n")
+                continue
             if decl.kind == "preserved":
                 for t in decl.preserved_tokens:
                     lines.append(t.leading_trivia)

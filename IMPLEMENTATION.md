@@ -565,7 +565,23 @@ all live variables.
 - **E072**: (reserved for future) A `goto` that crosses a variable
   declaration with `deinit`.
 
-### 10.5 Disallowed overloads
+### 10.5 `const` qualification
+
+Coda 0.1 does not support `const`-qualified object types in init-declarations
+or as method receivers. All generated methods take `struct Type *self` (a
+non-const pointer). A declaration such as `const Message msg.init("hello")`
+will pass through as-is in a preserved top-level function and produce a C
+compilation error because the generated `Message_init` expects
+`struct Message *self`, not `const struct Message *self`.
+
+A future version should allow `const`-qualified methods via an overload or
+annotation (e.g., `const init(...)`) and adjust the generated `self` type
+accordingly. Until then, Coda objects should be declared without `const`.
+
+The `const` keyword on non-Coda declarations (plain C `int`, `char *`, etc.)
+inside method bodies is unaffected and passes through normally.
+
+### 10.6 Disallowed overloads
 
 Hard-code the permitted list from `LANGUAGE.md`. Any other `operator` declaration
 is a diagnostic. In particular, never overload `=`, `&&`, `||`, casts, comma,

@@ -71,6 +71,12 @@ class Lowerer:
             elif decl.kind == "impl" and decl.body:
                 self._lower_implementation(decl.body)
                 lowered.append(decl)
+            elif decl.kind == "function":
+                if decl.body_tokens:
+                    decl.lowered_body = lower_method_body(
+                        decl.body_tokens, "", self.analyzer
+                    )
+                lowered.append(decl)
             elif decl.kind in ("include", "import", "preserved"):
                 lowered.append(decl)
             elif decl.kind == "template" and decl.body:

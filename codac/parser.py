@@ -123,6 +123,10 @@ class Parser:
         if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "typedef":
             return self._parse_preserved_until_semicolon_or_brace()
 
+        result = self._try_parse_function_def()
+        if result is not None:
+            return result
+
         return self._parse_preserved_until_semicolon_or_brace()
 
     def _parse_preserved_until_semicolon_or_brace(self) -> TopLevelDecl:
@@ -145,6 +149,81 @@ class Parser:
                     depth += 1
                 tokens.append(self.tokens.advance())
         return TopLevelDecl(kind="preserved", token=tokens[0] if tokens else Token("preserved", "", Span(self.path, 0, 1, 1)), preserved_tokens=tokens)
+
+    def _try_parse_function_def(self) -> TopLevelDecl | None:
+        """Detect and parse a C function definition at the top level.
+
+        Looks for the pattern: <type> <name> ( <params> ) { <body> }
+        Returns a TopLevelDecl with kind='function', head_tokens (signature
+        up to and including the closing paren) and body_tokens (the { ... }
+        block), or None if the current position is not a function definition.
+        """
+        saved = self.tokens.pos
+        head_tokens: list[Token] = []
+
+        while self.tokens.current:
+            t = self.tokens.current
+
+            if t.kind == "identifier":
+                peek = self.tokens.peek(1)
+                if peek and peek.spelling == "(":
+                    head_tokens.append(self.tokens.advance())
+                    head_tokens.append(self.tokens.advance())
+                    depth = 1
+                    while self.tokens.current and depth > 0:
+                        t2 = self.tokens.advance()
+                        head_tokens.append(t2)
+                        if t2.spelling == "(":
+                            depth += 1
+                        elif t2.spelling == ")":
+                            depth -= 1
+                    if depth != 0:
+                        self.tokens.pos = saved
+                        return None
+                    if self.tokens.current and self.tokens.current.spelling == "{":
+                        body_tokens = self._parse_balanced_brace_block()
+                        return TopLevelDecl(
+                            kind="function",
+                            token=head_tokens[0] if head_tokens else Token("function", "", Span(self.path, 0, 1, 1)),
+                            head_tokens=head_tokens,
+                            body_tokens=body_tokens,
+                        )
+                    if self.tokens.current and self.tokens.current.spelling == ";":
+                        head_tokens.append(self.tokens.advance())
+                        return TopLevelDecl(
+                            kind="function",
+                            token=head_tokens[0] if head_tokens else Token("function", "", Span(self.path, 0, 1, 1)),
+                            head_tokens=head_tokens,
+                            body_tokens=[],
+                        )
+                    self.tokens.pos = saved
+                    return None
+                else:
+                    self.tokens.pos = saved
+                    return None
+
+            if t.spelling in (";", "="):
+                self.tokens.pos = saved
+                return None
+
+            head_tokens.append(self.tokens.advance())
+
+        self.tokens.pos = saved
+        return None
+
+    def _parse_balanced_brace_block(self) -> list[Token]:
+        tokens: list[Token] = []
+        if self.tokens.current and self.tokens.current.spelling == "{":
+            tokens.append(self.tokens.advance())
+            depth = 1
+            while self.tokens.current and depth > 0:
+                t = self.tokens.advance()
+                tokens.append(t)
+                if t.spelling == "{":
+                    depth += 1
+                elif t.spelling == "}":
+                    depth -= 1
+        return tokens
 
     def _maybe_parse_struct(self) -> TopLevelDecl:
         struct_token = self.tokens.advance()

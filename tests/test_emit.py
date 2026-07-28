@@ -368,6 +368,65 @@ class TestEmit(unittest.TestCase):
         h, c, diags = self._emit_with_diagnostics(source)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
+    def test_free_function_init_decl_and_method_call(self):
+        source = """
+        struct Message { char msg[64]; };
+        impl Message {
+            init(const char *msg) { }
+            void print() { }
+        }
+        int main() {
+            Message msg.init("hello");
+            msg.print();
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("int main()", c)
+        self.assertIn("struct Message msg;", c)
+        self.assertIn("Message_init(&msg, \"hello\")", c)
+        self.assertIn("Message_print(&msg)", c)
+        self.assertIn("return 0;", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_free_function_plain_c(self):
+        source = """
+        int add(int a, int b) {
+            return a + b;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("int add(int a, int b)", c)
+        self.assertIn("return a + b;", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_forward_decl_passthrough(self):
+        source = """
+        int add(int a, int b);
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("int add(int a, int b);", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_method_call_on_local_variable(self):
+        source = """
+        struct Message { char msg[64]; };
+        impl Message {
+            init(const char *msg) { }
+            void print() { }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Message msg.init("hello");
+                msg.print();
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Message_print(&msg)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
     def test_array_decl_passthrough(self):
         source = """
         struct Point { int x; int y; };

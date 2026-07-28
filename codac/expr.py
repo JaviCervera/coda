@@ -354,8 +354,7 @@ def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, 
     def walk(stmts: list[Stmt]):
         for s in stmts:
             if s.kind == "vardecl" and s.var_name and s.var_type:
-                if analyzer.has_deinit(s.var_type):
-                    var_info[s.var_name] = s.var_type
+                var_info[s.var_name] = s.var_type
             for c in s.children:
                 walk([c])
     walk(stmts)
@@ -375,7 +374,7 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
                 if method_name == "deinit" and callee.kind == "member":
                     if var_info:
                         recv_name = receiver.value if receiver.value else ""
-                        if recv_name in var_info:
+                        if recv_name in var_info and analyzer.has_deinit(var_info[recv_name]):
                             analyzer.diagnostics.append(Diagnostic(
                                 code="E070",
                                 message=f"explicit deinit() on automatic variable of type '{var_info[recv_name]}' which has scope cleanup",
@@ -383,7 +382,7 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
                             ))
                             return expr
 
-                impl_info, struct_name = _resolve_method(method_name, receiver, current_struct, analyzer)
+                impl_info, struct_name = _resolve_method(method_name, receiver, current_struct, analyzer, var_info)
                 if impl_info and struct_name and method_name in impl_info.methods:
                     sig = impl_info.methods[method_name]
                     c_name = method_c_name(struct_name, method_name)
@@ -404,8 +403,9 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
     return expr
 
 
-def _resolve_method(method_name: str, receiver: Expr, current_struct: str, analyzer: SemanticAnalyzer):
-    target_type = _resolve_type(receiver, current_struct, analyzer)
+def _resolve_method(method_name: str, receiver: Expr, current_struct: str, analyzer: SemanticAnalyzer,
+                    var_info: dict[str, str] | None = None):
+    target_type = _resolve_type(receiver, current_struct, analyzer, var_info)
     if target_type:
         impl = analyzer.get_implementation(target_type)
         if impl and method_name in impl.methods:
@@ -413,9 +413,13 @@ def _resolve_method(method_name: str, receiver: Expr, current_struct: str, analy
     return None, None
 
 
-def _resolve_type(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer) -> str | None:
+def _resolve_type(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
+                  var_info: dict[str, str] | None = None) -> str | None:
     if expr.kind in ("identifier", "ident") and expr.value == "self":
         return current_struct
+
+    if expr.kind in ("identifier", "ident") and var_info and expr.value in var_info:
+        return var_info[expr.value]
 
     if expr.kind == "arrow":
         inner = expr.children[0] if expr.children else None
