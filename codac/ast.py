@@ -92,6 +92,7 @@ class Stmt:
     var_type: str | None = None
     has_init_call: bool = False
     var_init_arg_tokens: list[Token] = dataclasses.field(default_factory=list)
+    var_init_expr: Optional[Expr] = None
 
 
 @dataclasses.dataclass

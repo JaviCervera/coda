@@ -5,7 +5,7 @@ from typing import Optional
 from codac.ast import Expr, Stmt, Token
 from codac.diagnostics import Diagnostic
 from codac.names import method_c_name
-from codac.typesys import SemanticAnalyzer
+from codac.typesys import OPERATOR_NAMES, SemanticAnalyzer
 
 
 DECL_KEYWORDS = frozenset({
@@ -29,6 +29,7 @@ PREC = {
 }
 
 UNARY_OPS = frozenset({"&", "*", "+", "-", "!", "~", "++", "--"})
+COMPOUND_ASSIGN_OPS = frozenset({"operator+=", "operator-=", "operator*=", "operator/="})
 
 
 class Cursor:
@@ -210,6 +211,18 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
                 )
         c.pos = saved
         return None
+
+    if next_spelling == "=":
+        c.advance()
+        init_expr = _parse_expr(c, 0)
+        c.match(";")
+        return Stmt(
+            kind="vardecl", tokens=[],
+            var_name=var_name, var_type=type_name,
+            has_init_call=False,
+            var_init_arg_tokens=[],
+            var_init_expr=init_expr,
+        )
 
     c.pos = saved
     return None
@@ -400,6 +413,33 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
                     call.value = sig.result_type if method_name != "deinit" else None
                     return call
 
+    if expr.kind == "binary":
+        op_method_name = f"operator{expr.token.spelling}"
+        if op_method_name not in OPERATOR_NAMES:
+            return expr
+        lhs_type = _resolve_type(expr.children[0], current_struct, analyzer, var_info)
+        if lhs_type is None:
+            return expr
+        impl = analyzer.get_implementation(lhs_type)
+        if impl is None:
+            return expr
+        if op_method_name in impl.methods:
+            sig = impl.methods[op_method_name]
+            c_name = method_c_name(lhs_type, op_method_name)
+            addr = Expr(kind="unary", token=Token("punctuator", "&", None), children=[expr.children[0]])
+            ident = Expr(kind="ident", token=Token("identifier", c_name, None), value=c_name)
+            call = Expr(kind="call", token=Token("punctuator", "(", None), children=[ident, addr, expr.children[1]])
+            call.value = sig.result_type
+            if op_method_name in COMPOUND_ASSIGN_OPS:
+                call = Expr(kind="unary", token=Token("punctuator", "*", None), children=[call])
+            return call
+        analyzer.diagnostics.append(Diagnostic(
+            code="E052",
+            message=f"operator '{expr.token.spelling}' not implemented for type '{lhs_type}'",
+            span=expr.token.span if expr.token and expr.token.span else None,
+        ))
+        return expr
+
     return expr
 
 
@@ -522,6 +562,8 @@ def _emit_stmt(stmt: Stmt) -> str:
                 inner = inner[1:-1]
             arg_text = "".join(t.leading_trivia + t.spelling for t in inner).strip()
             return f"struct {type_name} {var_name};\n{type_name}_init(&{var_name}{', ' + arg_text if arg_text else ''});"
+        if stmt.var_init_expr:
+            return f"struct {type_name} {var_name} = {_emit_expr(stmt.var_init_expr)};"
         return f"struct {type_name} {var_name} = {{0}};"
 
     if stmt.kind == "deinit_call":
@@ -645,6 +687,9 @@ def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer,
                     message=f"discarded return value: call returns type '{result_type}' which has deinit",
                     span=stmt.expr.token.span if stmt.expr.token and stmt.expr.token.span else None,
                 ))
+
+    if stmt.var_init_expr:
+        stmt.var_init_expr = _lower_expr(stmt.var_init_expr, current_struct, analyzer, var_info)
 
     stmt.children = [_lower_stmt(c, current_struct, analyzer, var_info) for c in stmt.children]
     return stmt

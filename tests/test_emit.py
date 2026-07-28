@@ -554,5 +554,183 @@ class TestEmit(unittest.TestCase):
             self.assertEqual(len([d for d in all_diags if d.severity == "error"]), 0)
 
 
+    def test_binary_operator_expr_stmt(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            struct Fix16 operator+(struct Fix16 rhs) {
+                struct Fix16 r;
+                r.raw = self->raw + rhs.raw;
+                return r;
+            }
+        }
+        struct Example { int dummy; };
+        impl Example {
+            void test(void) {
+                Fix16 a;
+                Fix16 b;
+                a + b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Fix16_operator_add(&a, b)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_binary_operator_vardecl(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            struct Fix16 operator+(struct Fix16 rhs) {
+                struct Fix16 r;
+                r.raw = self->raw + rhs.raw;
+                return r;
+            }
+        }
+        struct Example { int dummy; };
+        impl Example {
+            void test(void) {
+                Fix16 a;
+                Fix16 b;
+                Fix16 c = a + b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("struct Fix16 c = Fix16_operator_add(&a, b)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_binary_operator_return(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            struct Fix16 operator+(struct Fix16 rhs) {
+                struct Fix16 r;
+                r.raw = self->raw + rhs.raw;
+                return r;
+            }
+        }
+        struct Example { int dummy; };
+        impl Example {
+            struct Fix16 test(void) {
+                Fix16 a;
+                Fix16 b;
+                return a + b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("return Fix16_operator_add(&a, b)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_compound_assign_operator(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            struct Fix16 *operator+=(struct Fix16 rhs) {
+                self->raw += rhs.raw;
+                return self;
+            }
+        }
+        struct Example { int dummy; };
+        impl Example {
+            void test(void) {
+                Fix16 a;
+                Fix16 b;
+                a += b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("*Fix16_operator_add_assign(&a, b)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_binary_operator_primitive(self):
+        source = """
+        struct Example { int dummy; };
+        impl Example {
+            int test(void) {
+                int a = 10;
+                int b = 20;
+                return a + b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("a + b", c)
+        self.assertNotIn("operator_add", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_binary_operator_not_found(self):
+        source = """
+        struct Vec2 { int x; int y; };
+        impl Vec2 { }
+        struct Example { int dummy; };
+        impl Example {
+            void test(void) {
+                Vec2 a;
+                Vec2 b;
+                a + b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertTrue(any("E052" in d.code for d in diags),
+                        "Expected E052 for missing operator overload")
+
+    def test_chained_binary_operators(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            struct Fix16 operator+(struct Fix16 rhs) {
+                struct Fix16 r;
+                r.raw = self->raw + rhs.raw;
+                return r;
+            }
+            struct Fix16 operator*(struct Fix16 rhs) {
+                struct Fix16 r;
+                r.raw = self->raw * rhs.raw;
+                return r;
+            }
+        }
+        struct Example { int dummy; };
+        impl Example {
+            void test(void) {
+                Fix16 a;
+                Fix16 b;
+                Fix16 c;
+                a + b * c;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Fix16_operator_add(&a, Fix16_operator_mul(&b, c))", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_no_coda_syntax_in_operator_output(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            struct Fix16 operator+(struct Fix16 rhs) {
+                struct Fix16 r;
+                r.raw = self->raw + rhs.raw;
+                return r;
+            }
+        }
+        struct Example { int dummy; };
+        impl Example {
+            void test(void) {
+                Fix16 a;
+                Fix16 b;
+                Fix16 c = a + b;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertNotIn("operator+", c)
+        self.assertNotIn("impl", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
