@@ -11,7 +11,19 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - name: Unit & runtime tests
         run: python -m unittest discover tests/ -v
+      - name: Minimal "hello" example
+        run: |
+          python -m codac examples/hello.co --out-dir /tmp/ci &&
+          cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \
+             -o /tmp/hello_ci /tmp/ci/hello.c &&
+          /tmp/hello_ci
       - name: End-to-end example
+        run: |
+          python -m codac examples/shapes_main.co --out-dir /tmp/ci &&
+          cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \
+             -o /tmp/shapes_ci /tmp/ci/shapes_main.c /tmp/ci/shapes.c &&
+          /tmp/shapes_ci
+      - name: Call from C example
         run: |
           python -m codac examples/shapes.co --out-dir /tmp/ci &&
           cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \

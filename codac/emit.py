@@ -44,6 +44,23 @@ class Emitter:
         with open(c_path, "w") as f:
             f.writelines(c_lines)
 
+    @staticmethod
+    def _module_struct_names(module: Module) -> set[str]:
+        names: set[str] = set()
+        for decl in module.top_level:
+            if decl.kind == "struct" and decl.body:
+                names.add(decl.body.name_token.spelling)
+        return names
+
+    @staticmethod
+    def _module_impl_struct_names(module: Module) -> set[str]:
+        names: set[str] = set()
+        for decl in module.top_level:
+            if decl.kind == "impl" and decl.body:
+                name = "".join(t.spelling for t in decl.body.name_tokens)
+                names.add(name)
+        return names
+
     def _emit_header(self, lines: list[str], module: Module, guard: str, lowerer: Lowerer, analyzer: SemanticAnalyzer):
         lines.append(f"#ifndef {guard}\n")
         lines.append(f"#define {guard}\n\n")
@@ -58,6 +75,9 @@ class Emitter:
                     lines.append(f'#include "{h}"\n')
 
         lines.append("\n")
+
+        module_structs = self._module_struct_names(module)
+        module_impls = self._module_impl_struct_names(module)
 
         for decl in module.top_level:
             if decl.kind == "struct" and decl.body:
@@ -77,7 +97,9 @@ class Emitter:
                 lines.append("};\n")
                 lines.append(f"typedef struct {struct_name} {struct_name};\n\n")
 
-        for struct_name in sorted(self._get_vtable_types(module, lowerer)):
+        for struct_name in sorted(self._get_vtable_types(lowerer)):
+            if struct_name not in module_structs:
+                continue
             lines.append(f"struct {vtable_type_name(struct_name)} {{\n")
             vt = lowerer.virtual_layout.vtable_types.get(struct_name)
             if vt:
@@ -86,7 +108,10 @@ class Emitter:
                     lines.append(f"    {result_type} (*{mname})(struct {struct_name} *);\n")
             lines.append("};\n\n")
 
-        for struct_name, methods in lowerer.methods.items():
+        for struct_name in sorted(module_impls):
+            methods = lowerer.methods.get(struct_name)
+            if not methods:
+                continue
             for lm in methods:
                 params = self._format_params(lm, struct_name)
                 lines.append(f"{lm.sig.result_type} {lm.c_name}({params});\n")
@@ -96,6 +121,9 @@ class Emitter:
 
     def _emit_source(self, lines: list[str], module: Module, guard: str, module_name: str, lowerer: Lowerer, analyzer: SemanticAnalyzer):
         lines.append(f'#include "{module_name}.h"\n\n')
+
+        module_structs = self._module_struct_names(module)
+        module_impls = self._module_impl_struct_names(module)
 
         for decl in module.top_level:
             if decl.kind == "function":
@@ -121,7 +149,10 @@ class Emitter:
                     lines.append(t.spelling)
                 lines.append("\n")
 
-        for struct_name, methods in lowerer.methods.items():
+        for struct_name in sorted(module_impls):
+            methods = lowerer.methods.get(struct_name)
+            if not methods:
+                continue
             for lm in methods:
                 params = self._format_params(lm, struct_name)
                 if lm.is_virtual:
@@ -130,7 +161,9 @@ class Emitter:
                     lines.append(f"{lm.sig.result_type} {lm.c_name}({params});\n")
         lines.append("\n")
 
-        for struct_name in sorted(self._get_vtable_types(module, lowerer)):
+        for struct_name in sorted(self._get_vtable_types(lowerer)):
+            if struct_name not in module_structs:
+                continue
             vt = lowerer.virtual_layout.vtable_types.get(struct_name)
             if vt:
                 lines.append(f"const struct {vtable_type_name(struct_name)} {vtable_instance_name(struct_name)} = {{\n")
@@ -138,7 +171,10 @@ class Emitter:
                     lines.append(f"    .{mname} = {impl},\n")
                 lines.append("};\n\n")
 
-        for struct_name, methods in lowerer.methods.items():
+        for struct_name in sorted(module_impls):
+            methods = lowerer.methods.get(struct_name)
+            if not methods:
+                continue
             for lm in methods:
                 if lm.is_virtual:
                     params = self._format_params(lm, struct_name)
@@ -181,6 +217,8 @@ class Emitter:
                     lines.append("}\n\n")
 
         for thunk_name, struct_name, mname, base_name in lowerer.virtual_layout.thunks:
+            if struct_name not in module_impls:
+                continue
             lines.append(f"void {thunk_name}(struct {base_name} *base)")
             lines.append("{\n")
             lines.append(f"    {impl_c_name(struct_name, mname)}((struct {struct_name} *)base);\n")
@@ -235,7 +273,7 @@ class Emitter:
                     return f"self->{field_name}.__coda_vptr"
         return "self->__coda_vptr"
 
-    def _get_vtable_types(self, module: Module, lowerer: Lowerer) -> set[str]:
+    def _get_vtable_types(self, lowerer: Lowerer) -> set[str]:
         names: set[str] = set()
         for struct_name in lowerer.virtual_layout.vtable_types:
             names.add(struct_name)

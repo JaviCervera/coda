@@ -30,29 +30,35 @@ def main():
     all_diagnostics: list[Diagnostic] = []
 
     loader = ModuleLoader(args.include_dirs)
-    module = loader.load(args.root, all_diagnostics)
+    root_module = loader.load(args.root, all_diagnostics)
     all_diagnostics.extend(loader.diagnostics)
+    all_modules = loader.all_modules
 
     if args.emit_deps:
         loader.write_deps(args.emit_deps, args.root, args.out_dir)
 
     analyzer = SemanticAnalyzer()
-    analyzer.analyze(module)
+    for mod in all_modules:
+        analyzer.analyze(mod)
     all_diagnostics.extend(analyzer.diagnostics)
 
     specializer = Specializer(analyzer)
-    specializer.collect_templates(module)
+    for mod in all_modules:
+        specializer.collect_templates(mod)
     all_diagnostics.extend(specializer.diagnostics)
 
     lowerer = Lowerer(analyzer)
-    lowerer.lower(module)
+    for mod in all_modules:
+        lowerer.lower(mod, finalize=False)
+    lowerer.compute_virtual_layouts()
 
     emitter = Emitter(args.out_dir)
-    try:
-        emitter.emit(module, lowerer, analyzer)
-    except Exception as e:
-        print(f"emission error: {e}", file=sys.stderr)
-        sys.exit(1)
+    for mod in all_modules:
+        try:
+            emitter.emit(mod, lowerer, analyzer)
+        except Exception as e:
+            print(f"emission error for {mod.path}: {e}", file=sys.stderr)
+            sys.exit(1)
 
     for d in all_diagnostics:
         print(format_diagnostic(d), file=sys.stderr)

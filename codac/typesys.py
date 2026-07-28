@@ -69,18 +69,17 @@ class SemanticAnalyzer:
 
     def analyze(self, module: Module):
         for decl in module.top_level:
-            self._analyze_decl(decl, module.path)
-
-    def _analyze_decl(self, decl: TopLevelDecl, module_path: str):
-        if decl.kind == "struct" and decl.body:
-            self._register_struct(decl.body, module_path)
-        elif decl.kind == "impl" and decl.body:
-            self._register_implementation(decl.body, module_path)
-        elif decl.kind == "template" and decl.body:
-            if isinstance(decl.body.body, StructDecl):
-                self._register_struct(decl.body.body, module_path)
-            elif isinstance(decl.body.body, Implementation):
-                self._register_implementation(decl.body.body, module_path)
+            if decl.kind == "struct" and decl.body:
+                self._register_struct(decl.body, module.path)
+            elif decl.kind == "template" and decl.body:
+                if isinstance(decl.body.body, StructDecl):
+                    self._register_struct(decl.body.body, module.path)
+        for decl in module.top_level:
+            if decl.kind == "impl" and decl.body:
+                self._register_implementation(decl.body, module.path)
+            elif decl.kind == "template" and decl.body:
+                if isinstance(decl.body.body, Implementation):
+                    self._register_implementation(decl.body.body, module.path)
 
     def _register_struct(self, sd: StructDecl, module_path: str):
         name = sd.name_token.spelling

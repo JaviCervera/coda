@@ -61,7 +61,7 @@ class Lowerer:
         self.methods: dict[str, list[LoweredMethod]] = {}
         self.virtual_layout = VirtualLayout()
 
-    def lower(self, module: Module) -> list[TopLevelDecl]:
+    def lower(self, module: Module, finalize: bool = True) -> list[TopLevelDecl]:
         lowered: list[TopLevelDecl] = []
         for decl in module.top_level:
             if decl.kind == "struct" and decl.body:
@@ -81,7 +81,8 @@ class Lowerer:
                 lowered.append(decl)
             elif decl.kind == "template" and decl.body:
                 lowered.append(decl)
-        self._compute_virtual_layouts()
+        if finalize:
+            self.compute_virtual_layouts()
         return lowered
 
     def _lower_struct(self, sd: StructDecl) -> LoweredStruct:
@@ -130,7 +131,7 @@ class Lowerer:
             self.virtual_layout.vtable_types[struct_name] = vt
         vt.slots.append((ls.slot_name, ls.impl_name))
 
-    def _compute_virtual_layouts(self):
+    def compute_virtual_layouts(self):
         for struct_name, info in self.analyzer.implementations.items():
             if not info.virtual_slots and not any(
                 m.is_virtual or m.is_override for m in info.methods.values()

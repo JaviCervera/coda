@@ -1,0 +1,21 @@
+#import "shapes.co"
+#include <stdio.h>
+
+int main(void) {
+    /* Point with init, move */
+    Point p.init(3, 4);
+    p.move(1, -1);
+    printf("Point: (%d, %d)\n", p.x, p.y);
+
+    /* Virtual dispatch through base pointer */
+    Rectangle r.init(5.0, 3.0);
+    printf("Rectangle area: %g\n", r.area());
+
+    /* Operator overloading */
+    Vec2 a.init(10, 20);
+    Vec2 b.init(1, 2);
+    Vec2 c = a + b;
+    printf("Vec2: (%d, %d)\n", c.x, c.y);
+
+    return 0;
+}

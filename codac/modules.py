@@ -15,6 +15,10 @@ class ModuleLoader:
         self.loading: set[str] = set()
         self.diagnostics: list[Diagnostic] = []
 
+    @property
+    def all_modules(self) -> list[Module]:
+        return list(self.loaded.values())
+
     def load(self, path: str, diagnostics: list[Diagnostic] | None = None) -> Module:
         if path in self.loaded:
             return self.loaded[path]
@@ -81,12 +85,15 @@ class ModuleLoader:
         return None
 
     def write_deps(self, dep_file: str, root_path: str, out_dir: str):
-        root_name = os.path.splitext(os.path.basename(root_path))[0]
-        out_c = os.path.join(out_dir, f"{root_name}.c")
-        out_h = os.path.join(out_dir, f"{root_name}.h")
-        all_paths = sorted(self.loaded.keys())
-        dep_str = f"{out_c} {out_h}: \\\n"
-        for p in all_paths:
+        out_targets = []
+        for mod_path in self.loaded:
+            mod_name = os.path.splitext(os.path.basename(mod_path))[0]
+            out_targets.append(os.path.join(out_dir, f"{mod_name}.c"))
+            out_targets.append(os.path.join(out_dir, f"{mod_name}.h"))
+        all_sources = sorted(self.loaded.keys())
+        target_str = " ".join(sorted(out_targets))
+        dep_str = f"{target_str}: \\\n"
+        for p in all_sources:
             dep_str += f"  {p} \\\n"
         dep_str += "\n"
         with open(dep_file, "w") as f:

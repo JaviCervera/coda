@@ -4,7 +4,9 @@ import unittest
 
 from codac.emit import Emitter
 from codac.lower import Lowerer
+from codac.modules import ModuleLoader
 from codac.parser import Parser
+from codac.specialize import Specializer
 from codac.typesys import SemanticAnalyzer
 
 
@@ -439,6 +441,117 @@ class TestEmit(unittest.TestCase):
         """
         h, c, diags = self._emit_with_diagnostics(source)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+
+    def test_multi_module_import(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shapes_co = os.path.join(tmpdir, "shapes.co")
+            main_co = os.path.join(tmpdir, "main.co")
+            out_dir = os.path.join(tmpdir, "out")
+
+            with open(shapes_co, "w") as f:
+                f.write("""
+                    struct Point { int x; int y; };
+                    impl Point {
+                        void move(int dx, int dy) { }
+                    }
+                """)
+            with open(main_co, "w") as f:
+                f.write('#import "shapes.co"\nstruct Holder { Point p; };\n')
+
+            loader = ModuleLoader(include_dirs=[tmpdir])
+            all_diags: list = []
+            loader.load(main_co, all_diags)
+            all_modules = loader.all_modules
+
+            analyzer = SemanticAnalyzer()
+            for mod in all_modules:
+                analyzer.analyze(mod)
+
+            specializer = Specializer(analyzer)
+            for mod in all_modules:
+                specializer.collect_templates(mod)
+
+            lowerer = Lowerer(analyzer)
+            for mod in all_modules:
+                lowerer.lower(mod, finalize=False)
+            lowerer.compute_virtual_layouts()
+
+            emitter = Emitter(out_dir)
+            for mod in all_modules:
+                emitter.emit(mod, lowerer, analyzer)
+
+            shapes_h = os.path.join(out_dir, "shapes.h")
+            shapes_c = os.path.join(out_dir, "shapes.c")
+            main_h = os.path.join(out_dir, "main.h")
+            main_c = os.path.join(out_dir, "main.c")
+
+            self.assertTrue(os.path.exists(shapes_h), "shapes.h should exist")
+            self.assertTrue(os.path.exists(shapes_c), "shapes.c should exist")
+            self.assertTrue(os.path.exists(main_h), "main.h should exist")
+            self.assertTrue(os.path.exists(main_c), "main.c should exist")
+
+            with open(shapes_h) as f:
+                shapes_h_content = f.read()
+            self.assertIn("CODA_SHAPES_CO", shapes_h_content)
+            self.assertIn("struct Point", shapes_h_content)
+            self.assertIn("Point_move", shapes_h_content)
+
+            with open(shapes_c) as f:
+                shapes_c_content = f.read()
+            self.assertIn('#include "shapes.h"', shapes_c_content)
+            self.assertIn("Point_move", shapes_c_content)
+
+            with open(main_h) as f:
+                main_h_content = f.read()
+            self.assertIn('#include "shapes.h"', main_h_content)
+            self.assertIn("struct Holder", main_h_content)
+
+            self.assertEqual(len([d for d in all_diags if d.severity == "error"]), 0)
+
+    def test_multi_module_import_diamond(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib_co = os.path.join(tmpdir, "lib.co")
+            helper_co = os.path.join(tmpdir, "helper.co")
+            main_co = os.path.join(tmpdir, "main.co")
+            out_dir = os.path.join(tmpdir, "out")
+
+            with open(lib_co, "w") as f:
+                f.write("struct Lib { int x; };\n")
+            with open(helper_co, "w") as f:
+                f.write('#import "lib.co"\nimpl Lib { void help(void) { } }\n')
+            with open(main_co, "w") as f:
+                f.write('#import "lib.co"\n#import "helper.co"\nstruct Main { Lib l; };\n')
+
+            loader = ModuleLoader(include_dirs=[tmpdir])
+            all_diags: list = []
+            loader.load(main_co, all_diags)
+            all_modules = loader.all_modules
+
+            analyzer = SemanticAnalyzer()
+            for mod in all_modules:
+                analyzer.analyze(mod)
+
+            specializer = Specializer(analyzer)
+            for mod in all_modules:
+                specializer.collect_templates(mod)
+
+            lowerer = Lowerer(analyzer)
+            for mod in all_modules:
+                lowerer.lower(mod, finalize=False)
+            lowerer.compute_virtual_layouts()
+
+            emitter = Emitter(out_dir)
+            for mod in all_modules:
+                emitter.emit(mod, lowerer, analyzer)
+
+            for name in ("lib", "helper", "main"):
+                self.assertTrue(os.path.exists(os.path.join(out_dir, f"{name}.h")),
+                                f"{name}.h should exist")
+                self.assertTrue(os.path.exists(os.path.join(out_dir, f"{name}.c")),
+                                f"{name}.c should exist")
+
+            self.assertEqual(len([d for d in all_diags if d.severity == "error"]), 0)
 
 
 if __name__ == "__main__":
