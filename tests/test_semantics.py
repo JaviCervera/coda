@@ -197,6 +197,84 @@ class TestSemantics(unittest.TestCase):
         codes = [d.code for d in analyzer.diagnostics]
         self.assertIn("E025", codes)
 
+    def test_override_const_mismatch_drop_errors(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void update(void) const { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override void update(void) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E027", codes)
+
+    def test_override_const_mismatch_add_errors(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void update(void) { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override void update(void) const { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E027", codes)
+
+    def test_override_return_type_mismatch_errors(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual int get_value(void) { return 0; }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override double get_value(void) { return 0.0; }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E027", codes)
+
+    def test_override_param_type_mismatch_errors(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual void resize(int w, int h) { }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override void resize(double w, double h) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertIn("E027", codes)
+
+    def test_override_signature_match_valid(self):
+        source = """
+        struct Entity { int id; };
+        impl Entity {
+            virtual int get_value(void) const { return 0; }
+        }
+        struct Sprite : Entity { int x; };
+        impl Sprite {
+            override int get_value(void) const { return 1; }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        codes = [d.code for d in analyzer.diagnostics]
+        self.assertNotIn("E027", codes)
+        info = analyzer.get_implementation("Sprite")
+        self.assertTrue(info.methods["get_value"].is_override)
+        self.assertTrue(info.methods["get_value"].is_const)
+
 
 if __name__ == "__main__":
     unittest.main()

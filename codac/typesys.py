@@ -182,7 +182,15 @@ class SemanticAnalyzer:
                 base_sig = base.methods[sig.name]
                 if base_sig.is_virtual:
                     if sig.is_override:
-                        pass
+                        if base_sig.is_const != sig.is_const:
+                            self._diag("E027", f"overriding method '{sig.name}' changes 'const' qualifier",
+                                       span=m.name_token.span)
+                        elif base_sig.result_type != sig.result_type:
+                            self._diag("E027", f"overriding method '{sig.name}' has different return type",
+                                       span=m.name_token.span)
+                        elif base_sig.param_types != sig.param_types:
+                            self._diag("E027", f"overriding method '{sig.name}' has different parameter types",
+                                       span=m.name_token.span)
                     elif sig.is_virtual:
                         self._diag("E024", f"use 'override' instead of 'virtual' for method '{sig.name}'",
                                    span=m.name_token.span)

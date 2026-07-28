@@ -635,6 +635,7 @@ E023 invalid virtual override
 E024 use 'override' instead of 'virtual'
 E025 no virtual method to override
 E026 overriding method must use 'override' keyword
+E027 overriding method signature does not match base
 E030 unknown method
 E031 invalid method receiver
 E032 invalid method argument list
@@ -744,6 +745,7 @@ for AST/semantic snapshots when parser failures need focused tests.
 - valid override emits thunk and derived static vtable;
 - missing `override` on override gives `E026`;
 - `virtual` on override gives `E024`;
+- const/return/param signature mismatch on override gives `E027`;
 - derived-only virtual slot extends, rather than replaces, base slots;
 - base-pointer call dispatches to a derived override at runtime;
 - derived initializer installs the derived vtable after any base initializer call.

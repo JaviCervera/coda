@@ -37,6 +37,7 @@ ERROR_CODES = {
     "E024": "use 'override' instead of 'virtual'",
     "E025": "no virtual method to override",
     "E026": "overriding method must use 'override' keyword",
+    "E027": "overriding method signature does not match base",
     "E030": "unknown method",
     "E031": "invalid method receiver",
     "E032": "invalid method argument list",

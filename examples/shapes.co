@@ -24,7 +24,7 @@ impl Shape {
         self->origin.init(0, 0);
     }
 
-    virtual double area(void) {
+    virtual double area(void) const {
         return 0.0;
     }
 }
@@ -41,7 +41,7 @@ impl Rectangle {
         self->height = height;
     }
 
-    override double area(void) {
+    override double area(void) const {
         return self->width * self->height;
     }
 }
@@ -57,7 +57,7 @@ impl Vec2 {
         self->y = y;
     }
 
-    Vec2 operator+(Vec2 rhs) {
+    Vec2 operator+(Vec2 rhs) const {
         Vec2 result;
         result.x = self->x + rhs.x;
         result.y = self->y + rhs.y;
