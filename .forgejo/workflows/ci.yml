@@ -15,5 +15,5 @@ jobs:
         run: |
           python -m codac examples/shapes.co --out-dir /tmp/ci &&
           cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \
-             -o /tmp/shapes_ci /tmp/ci/shapes.c examples/shapes_main.c &&
+             -o /tmp/shapes_ci /tmp/ci/shapes.c examples/shapes_c.c &&
           /tmp/shapes_ci
