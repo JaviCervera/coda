@@ -1,0 +1,167 @@
+/* zx_ball.co — a bouncing-ball demo for the ZX Spectrum, compiled with z88dk.
+ *
+ * Showcases Coda's object model while staying friendly to a 3.5 MHz Z80:
+ *
+ *   - impl blocks with init and instance methods            (Vec2, Ball)
+ *   - operator overloading on a small value type            (Vec2 operator+=)
+ *   - a foreign-struct impl on z88dk's real struct r_Rect8  (<rect.h>) from
+ *     the C header — Coda only emits helper functions and never touches
+ *     the foreign layout
+ *
+ * Intentionally NOT used: virtual methods (vtable overhead), deinit
+ * (no heap or resources to release), and dynamic allocation.  Every object
+ * lives in static/stack storage; all arithmetic is plain 16-bit ints.
+ *
+ * Build (from the repository root):
+ *
+ *     bin/codac examples/zx_ball.co --out-dir build/zx_ball
+ *     zcc +zx -vn -create-app -o build/zx_ball/zx_ball build/zx_ball/zx_ball.c
+ *
+ * This produces build/zx_ball/zx_ball.tap.  Load it in a ZX Spectrum
+ * emulator (LOAD ""), press any key to quit the animation.
+ *
+ * Pixel space is 256x192 with (0,0) at the top-left; plot() and draw()
+ * come from <graphics.h>.  zx_border/zx_cls and the INK_/PAPER_ colour
+ * constants come from <arch/zx.h>.
+ */
+
+#include <stdint.h>
+#include <graphics.h>
+#include <arch/zx.h>
+#include <rect.h>
+#include <stdio.h>
+
+/* --- 1. Vec2 — a plain value type with overloaded operators ---------------- */
+struct Vec2 {
+    int x;
+    int y;
+};
+
+impl Vec2 {
+    init(int x, int y) {
+        self->x = x;
+        self->y = y;
+    }
+
+    /* Mutating compound-assign operator: return self so the compiler emits
+     * *Vec2_operator_add_assign(&lhs, rhs).  z88dk's classic sccz80 backend
+     * cannot return a struct by value, so operators here return a pointer
+     * to self instead of a fresh struct.                                  */
+    struct Vec2 *operator+=(struct Vec2 rhs) {
+        self->x += rhs.x;
+        self->y += rhs.y;
+        return self;
+    }
+}
+
+/* --- 2. Foreign impl — Coda methods on z88dk's struct r_Rect8 ---------------
+ * r_Rect8 is a tagged struct from <rect.h>:
+ *
+ *     struct r_Rect8 { uint8_t x, width, y, height; };
+ *
+ * It represents the axis-aligned interval [x, x+width-1] x [y, y+height-1].
+ * The impl only generates r_Rect8_* helper functions; the layout stays
+ * exactly as z88dk defines it.                                            */
+impl struct r_Rect8 {
+    uint8_t left(void) {
+        return self->x;
+    }
+
+    uint8_t right(void) {
+        return self->x + self->width - 1;
+    }
+
+    uint8_t top(void) {
+        return self->y;
+    }
+
+    uint8_t bottom(void) {
+        return self->y + self->height - 1;
+    }
+
+    /* True when point p lies inside the rectangle (inclusive). */
+    int contains(struct Vec2 p) {
+        return p.x >= self->left() && p.x <= self->right()
+            && p.y >= self->top() && p.y <= self->bottom();
+    }
+}
+
+/* --- 3. Ball — position + velocity, bounced inside a playfield ------------- */
+struct Ball {
+    struct Vec2 pos;
+    struct Vec2 vel;
+};
+
+impl Ball {
+    init(struct Vec2 pos, struct Vec2 vel) {
+        self->pos = pos;
+        self->vel = vel;
+    }
+
+    /* Move one step; reverse a velocity component when the next position
+     * would leave the playfield.  The ball stays strictly inside, so the
+     * plus-shaped sprite never writes off-screen pixels.
+     *
+     * NOTE: field is a parameter, not a struct field, so the receiver type
+     * is not resolved during lowering.  As in opengl.co, the generated
+     * helper names are called directly for foreign receivers.            */
+    void update(struct r_Rect8 *field) {
+        struct Vec2 next;
+        next = self->pos;
+        next += self->vel;
+        if (r_Rect8_contains(field, next)) {
+            self->pos = next;
+            return;
+        }
+        if (next.x < r_Rect8_left(field) || next.x > r_Rect8_right(field)) {
+            self->vel.x = -self->vel.x;
+        }
+        if (next.y < r_Rect8_top(field) || next.y > r_Rect8_bottom(field)) {
+            self->vel.y = -self->vel.y;
+        }
+    }
+
+    /* Draw a 3x3 plus-sign of pixels at the ball's position. */
+    void draw(void) {
+        plot(self->pos.x, self->pos.y);
+        plot(self->pos.x - 1, self->pos.y);
+        plot(self->pos.x + 1, self->pos.y);
+        plot(self->pos.x, self->pos.y - 1);
+        plot(self->pos.x, self->pos.y + 1);
+    }
+}
+
+/* --- 4. A crude busy-wait so the animation is watchable --------------------- */
+void delay(int count) {
+    volatile int i;
+    for (i = 0; i < count; i++) {
+    }
+}
+
+/* --- 5. Main -----------------------------------------------------------------
+ * Everything is stack-allocated; nothing is malloc'd and nothing needs
+ * freeing, so there is no deinit anywhere in this program.                */
+int main(void) {
+    struct r_Rect8 field;
+    field.x = 3;
+    field.width = 250;
+    field.y = 3;
+    field.height = 186;
+
+    zx_border(INK_BLACK);
+    zx_cls();
+
+    /* Ball built with init-declaration syntax. */
+    struct Vec2 start.init(32, 24);
+    struct Vec2 velocity.init(3, 2);
+    Ball ball.init(start, velocity);
+
+    /* Animate until a key is pressed. */
+    while (getk() == 0) {
+        ball.update(&field);
+        ball.draw();
+        delay(2500);
+    }
+
+    return 0;
+}

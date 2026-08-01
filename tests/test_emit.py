@@ -843,6 +843,159 @@ class TestEmit(unittest.TestCase):
         self.assertIn("Point_get_x((struct Point *)&p)", c)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
+    def test_method_call_inside_if_body(self):
+        source = """
+        struct Counter { int n; };
+        impl Counter {
+            init(int n) { self->n = n; }
+            void bump(void) { self->n++; }
+            int get(void) { return self->n; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Counter c.init(0);
+                if (c.get() == 0) {
+                    c.bump();
+                } else {
+                    c.bump();
+                }
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("if (Counter_get(&c) == 0)", c)
+        self.assertIn("Counter_bump(&c)", c)
+        self.assertIn("else {", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_method_call_inside_while_body_and_condition(self):
+        source = """
+        struct Counter { int n; };
+        impl Counter {
+            init(int n) { self->n = n; }
+            void bump(void) { self->n++; }
+            int get(void) { return self->n; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Counter c.init(0);
+                while (c.get() < 3) {
+                    c.bump();
+                }
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("while (Counter_get(&c) < 3)", c)
+        self.assertIn("Counter_bump(&c)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_method_call_inside_for_body(self):
+        source = """
+        struct Counter { int n; };
+        impl Counter {
+            init(int n) { self->n = n; }
+            void bump(void) { self->n++; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Counter c.init(0);
+                int i;
+                for (i = 0; i < 3; i++) {
+                    c.bump();
+                }
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("for (i = 0;i < 3; i++)", c)
+        self.assertIn("Counter_bump(&c)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_operator_inside_control_flow(self):
+        source = """
+        struct Fix16 { int raw; };
+        impl Fix16 {
+            int *operator+=(int rhs) {
+                self->raw += rhs;
+                return &self->raw;
+            }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            int run(void) {
+                Fix16 a;
+                Fix16 b;
+                int i;
+                int total = 0;
+                for (i = 0; i < 2; i++) {
+                    a += i;
+                }
+                if (a.raw > b.raw) total = 1;
+                return total;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Fix16_operator_add_assign(&a, i)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_do_while_lowering(self):
+        source = """
+        struct Counter { int n; };
+        impl Counter {
+            init(int n) { self->n = n; }
+            void bump(void) { self->n++; }
+            int get(void) { return self->n; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Counter c.init(0);
+                do {
+                    c.bump();
+                } while (c.get() < 2);
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("do {", c)
+        self.assertIn("Counter_bump(&c)", c)
+        self.assertIn("} while (Counter_get(&c) < 2);", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_nested_control_flow_method_calls(self):
+        source = """
+        struct Counter { int n; };
+        impl Counter {
+            init(int n) { self->n = n; }
+            void bump(void) { self->n++; }
+            int get(void) { return self->n; }
+        }
+        struct Helper { int dummy; };
+        impl Helper {
+            void run(void) {
+                Counter c.init(0);
+                int i;
+                int j;
+                for (i = 0; i < 3; i++) {
+                    if (i > 0) {
+                        while (c.get() < i) {
+                            c.bump();
+                        }
+                    }
+                }
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("Counter_get(&c)", c)
+        self.assertIn("Counter_bump(&c)", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

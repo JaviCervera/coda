@@ -260,7 +260,16 @@ def _parse_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt | N
     if c.match("{"):
         return _finish_block(c, type_names)
 
-    if c.peek_spelling() in ("if", "while", "for", "do", "switch", "case", "break", "continue", "goto", "else"):
+    s = c.peek_spelling()
+    if s == "if":
+        return _parse_if(c, type_names)
+    if s == "while":
+        return _parse_while(c, type_names)
+    if s == "for":
+        return _parse_for(c, type_names)
+    if s == "do":
+        return _parse_do(c, type_names)
+    if s in ("switch", "case", "break", "continue", "goto", "else"):
         return _parse_raw_until_semicolon_or_brace(c)
 
     if c.peek_spelling() in DECL_KEYWORDS:
@@ -336,6 +345,93 @@ def _finish_block(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt:
     return Stmt(kind="block", tokens=tokens, children=inner)
 
 
+def _parse_control_header(c: Cursor) -> tuple[list[Token], list[Token]]:
+    open_tok = c.peek()
+    if open_tok is None or open_tok.spelling != "(":
+        return [], []
+    c.advance()
+    header: list[Token] = [open_tok]
+    inner: list[Token] = []
+    depth = 1
+    while not c.done and depth > 0:
+        t = c.advance()
+        header.append(t)
+        if t.spelling == "(":
+            depth += 1
+        elif t.spelling == ")":
+            depth -= 1
+        if depth > 0:
+            inner.append(t)
+    return header, inner
+
+
+def _parse_control_body(c: Cursor, type_names: frozenset[str]) -> Stmt:
+    if c.match("{"):
+        return _finish_block(c, type_names)
+    stmt = _parse_stmt(c, type_names)
+    return stmt if stmt else Stmt(kind="passthrough", tokens=[])
+
+
+def _parse_if(c: Cursor, type_names: frozenset[str]) -> Stmt:
+    if_tok = c.advance()
+    header, inner = _parse_control_header(c)
+    cond = _parse_expr_raw(inner)
+    children = [_parse_control_body(c, type_names)]
+    if c.match("else"):
+        children.append(_parse_control_body(c, type_names))
+    return Stmt(kind="if", tokens=[if_tok] + header, children=children, expr=cond)
+
+
+def _parse_while(c: Cursor, type_names: frozenset[str]) -> Stmt:
+    while_tok = c.advance()
+    header, inner = _parse_control_header(c)
+    cond = _parse_expr_raw(inner)
+    return Stmt(kind="while", tokens=[while_tok] + header,
+                children=[_parse_control_body(c, type_names)], expr=cond)
+
+
+def _parse_for(c: Cursor, type_names: frozenset[str]) -> Stmt:
+    for_tok = c.advance()
+    header, inner = _parse_control_header(c)
+    parts = _split_on_semicolons(inner)
+    cond = _parse_expr_raw(parts[1]) if len(parts) > 1 else None
+    return Stmt(kind="for", tokens=[for_tok] + header,
+                children=[_parse_control_body(c, type_names)], expr=cond)
+
+
+def _parse_do(c: Cursor, type_names: frozenset[str]) -> Stmt:
+    do_tok = c.advance()
+    body = _parse_control_body(c, type_names)
+    if c.match("while"):
+        header, inner = _parse_control_header(c)
+        cond = _parse_expr_raw(inner)
+        c.match(";")
+        return Stmt(kind="do", tokens=[do_tok] + header, children=[body], expr=cond)
+    return Stmt(kind="do", tokens=[do_tok], children=[body])
+
+
+def _split_on_semicolons(tokens: list[Token]) -> list[list[Token]]:
+    parts: list[list[Token]] = [[]]
+    depth = 0
+    for t in tokens:
+        if t.spelling == "(":
+            depth += 1
+        elif t.spelling == ")":
+            depth -= 1
+        if t.spelling == ";" and depth == 0:
+            parts.append([])
+        else:
+            parts[-1].append(t)
+    return parts
+
+
+def _concat_tokens(tokens: list[Token]) -> str:
+    result = ""
+    for t in tokens:
+        result += t.leading_trivia + t.spelling
+    return result
+
+
 def _parse_raw_until_semicolon(c: Cursor) -> Stmt:
     tokens: list[Token] = []
     while not c.done and c.peek_spelling() != ";":
@@ -348,17 +444,33 @@ def _parse_raw_until_semicolon(c: Cursor) -> Stmt:
 def _parse_raw_until_semicolon_or_brace(c: Cursor) -> Stmt:
     tokens: list[Token] = []
     depth = 0
+    paren = 0
     while not c.done:
-        t = c.advance()
-        tokens.append(t)
+        t = c.peek()
         if t.spelling == "{":
+            tokens.append(c.advance())
             depth += 1
         elif t.spelling == "}":
-            depth -= 1
-            if depth < 0:
+            if depth == 0:
                 break
-        elif t.spelling == ";" and depth == 0:
+            tokens.append(c.advance())
+            depth -= 1
+        elif t.spelling == "(":
+            tokens.append(c.advance())
+            paren += 1
+        elif t.spelling == ")":
+            tokens.append(c.advance())
+            if paren > 0:
+                paren -= 1
+        elif t.spelling == ";" and depth == 0 and paren == 0:
+            tokens.append(c.advance())
             break
+        else:
+            tokens.append(c.advance())
+        if depth == 0 and tokens and tokens[-1].spelling == "}":
+            nxt = c.peek()
+            if nxt is None or nxt.spelling not in ("else", "while"):
+                break
     return Stmt(kind="passthrough", tokens=tokens)
 
 
@@ -603,6 +715,8 @@ def _emit_stmt(stmt: Stmt) -> str:
 
     if stmt.kind == "expr_stmt":
         result = _emit_expr(stmt.expr) if stmt.expr else ""
+        if stmt.expr and stmt.expr.kind == "unary" and stmt.expr.token.spelling == "*":
+            result = f"(void){_emit_expr(stmt.expr)}"
         for t in stmt.tokens:
             if t.spelling == ";":
                 result += ";"
@@ -625,6 +739,32 @@ def _emit_stmt(stmt: Stmt) -> str:
             result += inner + "\n"
         result += "}"
         return result
+
+    if stmt.kind == "if":
+        cond = _emit_expr(stmt.expr) if stmt.expr else ""
+        then = _emit_stmt(stmt.children[0]) if stmt.children else "{}"
+        result = f"if ({cond}) {then}"
+        if len(stmt.children) > 1 and stmt.children[1]:
+            result += f" else {_emit_stmt(stmt.children[1])}"
+        return result
+
+    if stmt.kind == "while":
+        cond = _emit_expr(stmt.expr) if stmt.expr else ""
+        body = _emit_stmt(stmt.children[0]) if stmt.children else "{}"
+        return f"while ({cond}) {body}"
+
+    if stmt.kind == "for":
+        parts = _split_on_semicolons(stmt.tokens[2:-1])
+        init = _concat_tokens(parts[0]) if len(parts) > 0 else ""
+        incr = _concat_tokens(parts[2]) if len(parts) > 2 else ""
+        cond = _emit_expr(stmt.expr) if stmt.expr else ""
+        body = _emit_stmt(stmt.children[0]) if stmt.children else "{}"
+        return f"for ({init};{cond};{incr}) {body}"
+
+    if stmt.kind == "do":
+        body = _emit_stmt(stmt.children[0]) if stmt.children else "{}"
+        cond = _emit_expr(stmt.expr) if stmt.expr else ""
+        return f"do {body} while ({cond});"
 
     if stmt.kind == "passthrough":
         result = ""
@@ -653,6 +793,8 @@ def _analyze_scope(stmts: list[Stmt], analyzer: SemanticAnalyzer):
                 block_vars = collect_block_vars(stmt.children)
                 if block_vars:
                     scope_map[id(stmt)] = block_vars
+            if stmt.kind in ("if", "while", "for", "do"):
+                collect_block_vars(stmt.children)
         return vars_in_scope
 
     root_vars = collect_block_vars(stmts)
@@ -697,6 +839,10 @@ def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[st
                             var_name=var_name, var_type=type_name,
                             var_is_const=is_const,
                         ))
+                new_stmts.append(stmt)
+
+            elif stmt.kind in ("if", "while", "for", "do"):
+                stmt.children = walk(stmt.children)
                 new_stmts.append(stmt)
 
             else:

@@ -287,6 +287,69 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile_and_run(source, c_helpers, test_main)
 
+    def test_control_flow_method_calls_runtime(self):
+        source = """
+        struct Counter { int n; };
+        impl Counter {
+            init(int n) { self->n = n; }
+            void bump(void) { self->n++; }
+            int get(void) { return self->n; }
+        }
+        struct Runner { int dummy; };
+        impl Runner {
+            int run(void) {
+                Counter c.init(0);
+                int i = 0;
+                while (c.get() < 3) {
+                    c.bump();
+                }
+                if (c.get() == 3) {
+                    for (i = 0; i < 2; i++) {
+                        c.bump();
+                    }
+                } else {
+                    c.bump();
+                }
+                return c.get();
+            }
+        }
+        """
+        test_main = """
+        struct Runner r;
+        int result = Runner_run(&r);
+        if (result != 5) return 1;
+        """
+        self._compile_and_run(source, "", test_main)
+
+    def test_operator_inside_loop_runtime(self):
+        source = """
+        struct Acc { int total; };
+        impl Acc {
+            init(void) { self->total = 0; }
+            int *operator+=(int n) {
+                self->total += n;
+                return &self->total;
+            }
+        }
+        struct Runner { int dummy; };
+        impl Runner {
+            int run(void) {
+                Acc a.init();
+                int i;
+                for (i = 0; i < 4; i++) {
+                    a += i;
+                }
+                return a.total;
+            }
+        }
+        """
+        test_main = """
+        struct Runner r;
+        int result = Runner_run(&r);
+        if (result != 6) return 1;
+        """
+        self._compile_and_run(source, "", test_main)
+
 
 if __name__ == "__main__":
     unittest.main()
