@@ -124,6 +124,24 @@ class TestEmit(unittest.TestCase):
         self.assertIn("__coda_vptr", h)
         self.assertNotIn("virtual", h)
 
+    def test_const_virtual_vtable_slot(self):
+        source = """
+        struct Shape { int dummy; };
+        impl Shape {
+            virtual double area(void) const { return 0.0; }
+        }
+        struct Rectangle : Shape { double w; };
+        impl Rectangle {
+            override double area(void) const { return 1.0; }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("double (*area)(const struct Shape *);", h)
+        self.assertIn("double (*area)(const struct Rectangle *);", h)
+        self.assertIn("double Shape_area(const struct Shape *self)", h)
+        self.assertIn("double Rectangle_area(const struct Rectangle *self)", h)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
     def test_no_coda_syntax_in_output(self):
         source = """
         struct Point { int x; int y; };

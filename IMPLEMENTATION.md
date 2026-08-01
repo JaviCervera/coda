@@ -419,6 +419,14 @@ void Entity_update(struct Entity *self) {
         (const struct Entity_vtable *)self->__coda_vptr;
     vt->update(self);
 }
+
+A `const` virtual method is emitted with a const-qualified self parameter on
+its vtable slot, matching the const-qualified implementation and dispatcher:
+
+```c
+struct Shape_vtable {
+    double (*area)(const struct Shape *);
+};
 ```
 
 An `init` for every concrete virtual type assigns the correct static vtable. If a
@@ -567,16 +575,17 @@ all live variables.
 
 ### 10.5 `const` qualification
 
-Coda 0.1 does not support `const`-qualified object types in init-declarations
-or as method receivers. All generated methods take `struct Type *self` (a
-non-const pointer). A declaration such as `const Message msg.init("hello")`
-will pass through as-is in a preserved top-level function and produce a C
-compilation error because the generated `Message_init` expects
-`struct Message *self`, not `const struct Message *self`.
+Coda supports `const`-qualified methods. A method declared with a trailing
+`const` is generated with `const struct Type *self` for the receiver in its
+declaration, implementation, dispatcher, and (for virtual methods) vtable slot
+(see §9.3). An override must preserve the base method's constness; a mismatch is
+`E027`.
 
-A future version should allow `const`-qualified methods via an overload or
-annotation (e.g., `const init(...)`) and adjust the generated `self` type
-accordingly. Until then, Coda objects should be declared without `const`.
+A `const`-qualified object init-declaration such as
+`const Message msg.init("hello")` is lowered to `const struct Message msg = {0}`
+followed by `Message_init((struct Message *)&msg, ...)`. `init` and `deinit`
+always receive a non-const pointer; const methods keep a const receiver. Calling
+a non-const method on a const object casts the receiver to non-const.
 
 The `const` keyword on non-Coda declarations (plain C `int`, `char *`, etc.)
 inside method bodies is unaffected and passes through normally.
@@ -748,7 +757,9 @@ for AST/semantic snapshots when parser failures need focused tests.
 - const/return/param signature mismatch on override gives `E027`;
 - derived-only virtual slot extends, rather than replaces, base slots;
 - base-pointer call dispatches to a derived override at runtime;
-- derived initializer installs the derived vtable after any base initializer call.
+- derived initializer installs the derived vtable after any base initializer call;
+- a `const` virtual method emits a const-qualified vtable slot that compiles
+  with `-Wall -Wextra -Werror -std=c89` and dispatches through a base pointer.
 
 ### 13.6 Template tests
 

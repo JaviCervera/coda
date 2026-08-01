@@ -105,7 +105,8 @@ class Emitter:
             if vt:
                 for mname, _ in vt.slots:
                     result_type = self._get_virtual_result_type(struct_name, mname)
-                    lines.append(f"    {result_type} (*{mname})(struct {struct_name} *);\n")
+                    self_prefix = self._get_virtual_self_prefix(struct_name, mname)
+                    lines.append(f"    {result_type} (*{mname})({self_prefix}struct {struct_name} *);\n")
             lines.append("};\n\n")
 
         for struct_name in sorted(module_impls):
@@ -233,6 +234,16 @@ class Emitter:
                     if expected == slot_name:
                         return msig.result_type
         return "void"
+
+    def _get_virtual_self_prefix(self, struct_name: str, slot_name: str) -> str:
+        if self.analyzer:
+            impl_info = self.analyzer.get_implementation(struct_name)
+            if impl_info:
+                for mname, msig in impl_info.methods.items():
+                    expected = method_c_name("", mname).removeprefix("_")
+                    if expected == slot_name:
+                        return "const " if msig.is_const else ""
+        return ""
 
     def _format_params(self, lm: LoweredMethod, struct_name: str) -> str:
         self_prefix = "const " if lm.sig.is_const else ""

@@ -260,6 +260,33 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile_and_run(source, c_helpers, test_main)
 
+    def test_const_virtual_dispatch_runtime(self):
+        source = """
+        struct Shape { int dummy; };
+        impl Shape {
+            init(void) { }
+            virtual double area(void) const { return 0.0; }
+        }
+        struct Rectangle : Shape { double w; double h; };
+        impl Rectangle {
+            init(double w, double h) {
+                self->base.init();
+                self->w = w;
+                self->h = h;
+            }
+            override double area(void) const { return self->w * self->h; }
+        }
+        """
+        c_helpers = """
+        """
+        test_main = """
+        struct Rectangle r;
+        Rectangle_init(&r, 3.0, 4.0);
+        double result = Shape_area((const struct Shape *)&r);
+        if (result != 12.0) return 1;
+        """
+        self._compile_and_run(source, c_helpers, test_main)
+
 
 if __name__ == "__main__":
     unittest.main()
