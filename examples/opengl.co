@@ -1,0 +1,224 @@
+/* opengl.co — a colored, rotating triangle using the OpenGL fixed pipeline
+ * (glBegin/glEnd) and GLFW, showcasing Coda's object model:
+ *
+ *   - impl blocks on a foreign C struct (GLFWwindow)
+ *   - init/deinit with automatic scope cleanup
+ *   - operator overloading on a value type (Color)
+ *   - instance methods on Vertex, Triangle, and Scene
+ *
+ * Build (after `python -m codac opengl.co --out-dir build/`):
+ *
+ *   Linux:   cc -o build/triangle build/opengl.c \
+ *                $(pkg-config --cflags --libs glfw3) -lGL -lm
+ *   macOS:   cc -o build/triangle build/opengl.c \
+ *                $(pkg-config --cflags --libs glfw3) -framework OpenGL -lm
+ *
+ * (macOS marks the fixed pipeline as deprecated; add
+ *  -DGL_SILENCE_DEPRECATION to silence those warnings.)
+ *
+ * The window hints below request a legacy OpenGL 2.1 context so the
+ * fixed-function pipeline is available (required on macOS).
+ *
+ * Close the window (or press Esc) to quit.
+ *
+ * Coda methods compile to ordinary C functions (Color_bind, Triangle_draw,
+ * Scene_frame, ...), so the render loop can drive the scene through the
+ * generated names as plain C glue.
+ */
+
+#include <GLFW/glfw3.h>
+#include <math.h>
+#include <stdio.h>
+
+/* --- 1. Extend a foreign C struct with Coda methods ------------------------
+ * Coda can attach methods to a tagged struct that comes from an included
+ * C header. GLFWwindow stays opaque; the generated helpers take a
+ * `struct GLFWwindow *self` and never touch the foreign layout.            */
+impl struct GLFWwindow {
+    int should_close(void) {
+        return glfwWindowShouldClose(self);
+    }
+
+    void swap_buffers(void) {
+        glfwSwapBuffers(self);
+    }
+
+    int escape_pressed(void) {
+        return glfwGetKey(self, GLFW_KEY_ESCAPE) == GLFW_PRESS;
+    }
+}
+
+/* --- 2. Color — a value type with operator methods ------------------------- */
+struct Color {
+    float r;
+    float g;
+    float b;
+};
+
+impl Color {
+    init(float r, float g, float b) {
+        self->r = r;
+        self->g = g;
+        self->b = b;
+    }
+
+    Color operator*(float scale) {
+        Color result;
+        result.r = self->r * scale;
+        result.g = self->g * scale;
+        result.b = self->b * scale;
+        return result;
+    }
+
+    Color operator+(Color rhs) {
+        Color result;
+        result.r = self->r + rhs.r;
+        result.g = self->g + rhs.g;
+        result.b = self->b + rhs.b;
+        return result;
+    }
+
+    void bind(void) {
+        glColor3f(self->r, self->g, self->b);
+    }
+}
+
+/* --- 3. Vertex — position plus a per-vertex color --------------------------- */
+struct Vertex {
+    float x;
+    float y;
+    Color color;
+};
+
+impl Vertex {
+    init(float x, float y, Color color) {
+        self->x = x;
+        self->y = y;
+        self->color = color;
+    }
+
+    void rotate(float angle) {
+        float c = cosf(angle);
+        float s = sinf(angle);
+        float nx = self->x * c - self->y * s;
+        float ny = self->x * s + self->y * c;
+        self->x = nx;
+        self->y = ny;
+    }
+
+    void draw(void) {
+        self->color.bind();
+        glVertex2f(self->x, self->y);
+    }
+}
+
+/* --- 4. Triangle — three vertices, rotated and drawn as a unit -------------- */
+struct Triangle {
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+};
+
+impl Triangle {
+    init(Color c0, Color c1, Color c2) {
+        self->v0.init(-0.5f, -0.4f, c0);
+        self->v1.init( 0.5f, -0.4f, c1);
+        self->v2.init( 0.0f,  0.6f, c2);
+    }
+
+    void rotate(float angle) {
+        self->v0.rotate(angle);
+        self->v1.rotate(angle);
+        self->v2.rotate(angle);
+    }
+
+    void draw(void) {
+        glBegin(GL_TRIANGLES);
+        self->v0.draw();
+        self->v1.draw();
+        self->v2.draw();
+        glEnd();
+    }
+}
+
+/* --- 5. Window — explicit lifetime with automatic scope cleanup ------------- */
+struct Window {
+    struct GLFWwindow *handle;
+};
+
+impl Window {
+    init(int width, int height, const char *title) {
+        self->handle = glfwCreateWindow(width, height, title, 0, 0);
+    }
+
+    deinit(void) {
+        if (self->handle != 0) {
+            glfwDestroyWindow(self->handle);
+        }
+        self->handle = 0;
+    }
+}
+
+/* --- 6. Scene — one frame of animation, composed from Coda methods ---------- */
+struct Scene {
+    struct GLFWwindow *window;
+    Triangle triangle;
+};
+
+impl Scene {
+    init(struct GLFWwindow *window, Triangle triangle) {
+        self->window = window;
+        self->triangle = triangle;
+    }
+
+    void frame(void) {
+        self->triangle.rotate(0.02f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        self->triangle.draw();
+        GLFWwindow_swap_buffers(self->window);
+    }
+}
+
+int main(void) {
+    if (!glfwInit()) {
+        printf("glfwInit failed\n");
+        return 1;
+    }
+
+    /* Ask for a legacy OpenGL 2.1 context so glBegin/glEnd (fixed pipeline)
+       is available, including on macOS. */
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+
+    {
+        Window win.init(800, 600, "Coda: rotating triangle");
+
+        if (win.handle == 0) {
+            printf("failed to create window\n");
+        }
+
+        glfwMakeContextCurrent(win.handle);
+        glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
+
+        /* Per-vertex colors built with Coda operator methods. */
+        Color red.init(1.0f, 0.0f, 0.0f);
+        Color green.init(0.0f, 1.0f, 0.0f);
+        Color blue.init(0.0f, 0.0f, 1.0f);
+
+        Color dark_red = red * 0.6f;
+        Color violet = dark_red + blue;
+
+        Triangle tri.init(red, green, violet);
+        Scene scene.init(win.handle, tri);
+
+        while (win.handle != 0 && !GLFWwindow_should_close(win.handle)
+               && !GLFWwindow_escape_pressed(win.handle)) {
+            Scene_frame(&scene);
+            glfwPollEvents();
+        }
+    }
+
+    glfwTerminate();
+    return 0;
+}
