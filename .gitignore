@@ -273,6 +273,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+.DS_Store
 examples/*
 !examples/*.co
 !examples/shapes_c.c

@@ -350,6 +350,36 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile_and_run(source, "", test_main)
 
+    def test_method_on_param_runtime(self):
+        source = """
+        struct A { int n; };
+        impl A {
+            init(int n) { self->n = n; }
+            void add(int x) { self->n += x; }
+            int get(void) { return self->n; }
+        }
+        struct Runner { int dummy; };
+        impl Runner {
+            int run(struct A *a) {
+                while (a->get() < 5) {
+                    a->add(1);
+                }
+                if (a->get() == 5) {
+                    a->add(2);
+                }
+                return a->get();
+            }
+        }
+        """
+        test_main = """
+        struct A a;
+        A_init(&a, 0);
+        struct Runner r;
+        int result = Runner_run(&r, &a);
+        if (result != 7) return 1;
+        """
+        self._compile_and_run(source, "", test_main)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -102,21 +102,21 @@ impl Ball {
      * would leave the playfield.  The ball stays strictly inside, so the
      * plus-shaped sprite never writes off-screen pixels.
      *
-     * NOTE: field is a parameter, not a struct field, so the receiver type
-     * is not resolved during lowering.  As in opengl.co, the generated
-     * helper names are called directly for foreign receivers.            */
+     * field is a foreign-struct parameter (struct r_Rect8 * from <rect.h>).
+     * Parameter receivers resolve through the generated r_Rect8_* helpers,
+     * so the calls below are plain Coda method calls.                       */
     void update(struct r_Rect8 *field) {
         struct Vec2 next;
         next = self->pos;
         next += self->vel;
-        if (r_Rect8_contains(field, next)) {
+        if (field->contains(next)) {
             self->pos = next;
             return;
         }
-        if (next.x < r_Rect8_left(field) || next.x > r_Rect8_right(field)) {
+        if (next.x < field->left() || next.x > field->right()) {
             self->vel.x = -self->vel.x;
         }
-        if (next.y < r_Rect8_top(field) || next.y > r_Rect8_bottom(field)) {
+        if (next.y < field->top() || next.y > field->bottom()) {
             self->vel.y = -self->vel.y;
         }
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from codac.ast import (
     Expr, Implementation, Method, Module, StructDecl, Token, TopLevelDecl,
 )
-from codac.expr import lower_method_body
+from codac.expr import _split_head_params, lower_method_body
 from codac.names import (
     impl_c_name, method_c_name, thunk_c_name, vtable_instance_name, vtable_type_name,
 )
@@ -74,7 +74,8 @@ class Lowerer:
             elif decl.kind == "function":
                 if decl.body_tokens:
                     decl.lowered_body = lower_method_body(
-                        decl.body_tokens, "", self.analyzer
+                        decl.body_tokens, "", self.analyzer,
+                        _split_head_params(decl.head_tokens),
                     )
                 lowered.append(decl)
             elif decl.kind in ("include", "import", "preserved"):
@@ -119,7 +120,7 @@ class Lowerer:
             )
             ls.slot_name = cname.removeprefix(f"{struct_name}_")
             if m.body_tokens:
-                ls.lowered_body = lower_method_body(m.body_tokens, struct_name, self.analyzer)
+                ls.lowered_body = lower_method_body(m.body_tokens, struct_name, self.analyzer, m.param_tokens)
             self.methods[struct_name].append(ls)
             if sig and (sig.is_virtual or sig.is_override):
                 self._register_virtual_slot(struct_name, sig, ls)

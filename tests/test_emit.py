@@ -996,6 +996,115 @@ class TestEmit(unittest.TestCase):
         self.assertIn("Counter_bump(&c)", c)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
+    def test_method_call_on_coda_param(self):
+        source = """
+        struct A { int x; };
+        impl A {
+            init(int x) { self->x = x; }
+            int get(void) { return self->x; }
+            void bump(void) { self->x++; }
+        }
+        struct B { int y; };
+        impl B {
+            init(int y) { self->y = y; }
+            int use(struct A *a) {
+                if (a->get() == 0) {
+                    a->bump();
+                }
+                return a->get();
+            }
+        }
+        int main(void) {
+            B b.init(0);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("if (A_get(a) == 0)", c)
+        self.assertIn("A_bump(a)", c)
+        self.assertIn("return A_get(a);", c)
+        self.assertNotIn("a->get()", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_method_call_on_foreign_param(self):
+        source = """
+        struct R { int x; int w; };
+        impl struct R {
+            int left(void) { return self->x; }
+            int right(void) { return self->x + self->w - 1; }
+            int contains(int p) { return p >= self->left() && p <= self->right(); }
+        }
+        struct Ball { int pos; };
+        impl Ball {
+            init(int pos) { self->pos = pos; }
+            int bounce(struct R *field) {
+                if (field->contains(self->pos)) {
+                    return 0;
+                }
+                return field->left();
+            }
+        }
+        int main(void) {
+            Ball b.init(3);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("if (R_contains(field, self->pos))", c)
+        self.assertIn("return R_left(field);", c)
+        self.assertNotIn("field->contains", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_operator_on_struct_params(self):
+        source = """
+        struct Vec2 { int x; int y; };
+        impl Vec2 {
+            struct Vec2 *operator+=(struct Vec2 rhs) {
+                self->x += rhs.x;
+                self->y += rhs.y;
+                return self;
+            }
+        }
+        struct Mover { int dummy; };
+        impl Mover {
+            init(int dummy) { self->dummy = dummy; }
+            void step(struct Vec2 *a, struct Vec2 *b) {
+                *a += *b;
+            }
+        }
+        int main(void) {
+            Mover m.init(0);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("(void)*Vec2_operator_add_assign(&*a, *b);", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_deinit_call_on_param_no_e070(self):
+        source = """
+        struct R { int n; };
+        impl R {
+            init(int n) { self->n = n; }
+            deinit(void) { self->n = 0; }
+        }
+        struct B { int y; };
+        impl B {
+            init(int y) { self->y = y; }
+            void cleanup(struct R *r) {
+                r->deinit();
+            }
+        }
+        int main(void) {
+            B b.init(1);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("R_deinit(r)", c)
+        errors = [d for d in diags if d.severity == "error"]
+        self.assertEqual([d.code for d in errors], [])
+
 
 if __name__ == "__main__":
     unittest.main()

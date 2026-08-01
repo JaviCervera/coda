@@ -503,9 +503,76 @@ def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, 
     return var_info
 
 
+def _param_type_map(param_tokens: list[list[Token]], analyzer: SemanticAnalyzer) -> dict[str, str]:
+    """Map parameter names to their (bare) struct type name.
+
+    Only parameters whose base type has an implementation are recorded, so
+    plain C types are skipped while Coda and foreign struct receivers are
+    resolvable during lowering.  Pointer stars and the 'struct '/'union '
+    prefix are stripped; the receiver call form (-> vs .) is decided by the
+    callee expression, not the parameter type.
+    """
+    result: dict[str, str] = {}
+    for tokens in param_tokens:
+        ids = [t for t in tokens if t.kind == "identifier"]
+        if not ids:
+            continue
+        name = ids[-1].spelling
+        parts: list[str] = []
+        for t in tokens:
+            if t is ids[-1]:
+                break
+            parts.append(t.spelling)
+        raw = " ".join(parts).strip()
+        if raw.startswith("struct "):
+            base = raw[len("struct "):]
+        elif raw.startswith("union "):
+            base = raw[len("union "):]
+        else:
+            continue
+        base = base.strip()
+        while base.endswith("*"):
+            base = base[:-1].strip()
+        if base and analyzer.get_implementation(base) is not None:
+            result[name] = base
+    return result
+
+
+def _split_head_params(head_tokens: list[Token]) -> list[list[Token]]:
+    """Split a function signature's head tokens into per-parameter token lists."""
+    params: list[list[Token]] = []
+    depth = 0
+    started = False
+    current: list[Token] = []
+    for t in head_tokens:
+        if t.spelling == "(" and not started:
+            started = True
+            continue
+        if not started:
+            continue
+        if t.spelling == "(":
+            depth += 1
+            current.append(t)
+        elif t.spelling == ")":
+            if depth == 0:
+                if current:
+                    params.append(current)
+                break
+            depth -= 1
+            current.append(t)
+        elif t.spelling == "," and depth == 0:
+            if current:
+                params.append(current)
+                current = []
+        else:
+            current.append(t)
+    return params
+
+
 def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
-                var_info: dict[str, tuple[str, bool]] | None = None) -> Expr:
-    expr.children = [_lower_expr(c, current_struct, analyzer, var_info) for c in expr.children]
+                var_info: dict[str, tuple[str, bool]] | None = None,
+                param_names: frozenset[str] | None = None) -> Expr:
+    expr.children = [_lower_expr(c, current_struct, analyzer, var_info, param_names) for c in expr.children]
 
     if expr.kind == "call" and len(expr.children) >= 1:
         callee = expr.children[0]
@@ -516,7 +583,9 @@ def _lower_expr(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
                 if method_name == "deinit" and callee.kind == "member":
                     if var_info:
                         recv_name = receiver.value if receiver.value else ""
-                        if recv_name in var_info and analyzer.has_deinit(var_info[recv_name][0]):
+                        if (recv_name in var_info
+                                and recv_name not in (param_names or ())
+                                and analyzer.has_deinit(var_info[recv_name][0])):
                             analyzer.diagnostics.append(Diagnostic(
                                 code="E070",
                                 message=f"explicit deinit() on automatic variable of type '{var_info[recv_name][0]}' which has scope cleanup",
@@ -593,6 +662,12 @@ def _resolve_type(expr: Expr, current_struct: str, analyzer: SemanticAnalyzer,
 
     if expr.kind in ("identifier", "ident") and var_info and expr.value in var_info:
         return var_info[expr.value][0]
+
+    if expr.kind == "unary" and expr.token and expr.token.spelling == "*":
+        inner = expr.children[0] if expr.children else None
+        if inner is None:
+            return None
+        return _resolve_type(inner, current_struct, analyzer, var_info)
 
     if expr.kind == "arrow":
         inner = expr.children[0] if expr.children else None
@@ -853,9 +928,10 @@ def _inject_cleanup(stmts: list[Stmt], scope_map: dict, root_vars: list[tuple[st
 
 
 def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer,
-                var_info: dict[str, tuple[str, bool]] | None = None) -> Stmt:
+                var_info: dict[str, tuple[str, bool]] | None = None,
+                param_names: frozenset[str] | None = None) -> Stmt:
     if stmt.expr:
-        stmt.expr = _lower_expr(stmt.expr, current_struct, analyzer, var_info)
+        stmt.expr = _lower_expr(stmt.expr, current_struct, analyzer, var_info, param_names)
 
         if stmt.kind == "expr_stmt" and stmt.expr.kind == "call":
             result_type = stmt.expr.value
@@ -867,18 +943,24 @@ def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer,
                 ))
 
     if stmt.var_init_expr:
-        stmt.var_init_expr = _lower_expr(stmt.var_init_expr, current_struct, analyzer, var_info)
+        stmt.var_init_expr = _lower_expr(stmt.var_init_expr, current_struct, analyzer, var_info, param_names)
 
-    stmt.children = [_lower_stmt(c, current_struct, analyzer, var_info) for c in stmt.children]
+    stmt.children = [_lower_stmt(c, current_struct, analyzer, var_info, param_names) for c in stmt.children]
     return stmt
 
 
-def lower_method_body(tokens: list[Token], struct_name: str, analyzer: SemanticAnalyzer) -> str:
+def lower_method_body(tokens: list[Token], struct_name: str, analyzer: SemanticAnalyzer,
+                      param_tokens: list[list[Token]] | None = None) -> str:
     type_names = frozenset(analyzer.structs.keys())
 
     stmts = _parse_stmts(tokens, type_names)
     var_info = _build_var_info(stmts, analyzer)
-    stmts = [_lower_stmt(s, struct_name, analyzer, var_info) for s in stmts]
+    param_names: frozenset[str] = frozenset()
+    if param_tokens:
+        param_types = _param_type_map(param_tokens, analyzer)
+        var_info.update({name: (type_name, False) for name, type_name in param_types.items()})
+        param_names = frozenset(param_types.keys())
+    stmts = [_lower_stmt(s, struct_name, analyzer, var_info, param_names) for s in stmts]
 
     scope_map, root_vars = _analyze_scope(stmts, analyzer)
 

@@ -110,11 +110,28 @@ parsing a method body, the pipeline is:
 ```text
 parse tokens into preliminary Stmt list
   -> build variable-info map (var name -> type for deinit types)
+  -> merge parameter receiver info (param name -> struct type) when the
+     implementation lowering supplies a parameter token list
   -> lower each Stmt (method/operator calls, diagnostics)
   -> analyze scope (collect variables needing cleanup)
   -> inject cleanup (deinit calls before returns and at block exits)
   -> emit each Stmt to C text
 ```
+
+Method and free-function bodies are lowered via `lower_method_body`, which
+accepts the parameter token list so that receiver resolution can see
+parameters, not just `self` and local variables. `_param_type_map` records
+each parameter whose base type has an implementation (plain C types are
+skipped), so calls like `field->contains(next)` on a foreign-struct
+parameter lower to the generated helper `r_Rect8_contains(field, next)`.
+Parameters are merged into the variable-info map but deliberately excluded
+from scope analysis and cleanup injection, so parameters are never
+implicitly deinitialized. The `param_names` set is threaded through the
+statement/expression lowering so that an explicit `param.deinit()` call
+does not trip the E070 "discarded deinit-returning call" diagnostic.
+
+Free functions pass their split head-token parameter list; instance methods
+pass the implementation's parsed `param_tokens`.
 
 Compilation is whole-program over the root module's `#import` closure. This is
 important: it allows Coda to discover all template instantiations and resolve
@@ -233,6 +250,12 @@ postfix: receiver -> identifier ( arguments )
 These are parsed as ordinary member access first. Semantic resolution turns them
 into method calls only when the receiver type has the named Coda method. Plain
 field access stays plain C.
+
+The receiver type is resolved from `self`, from local variables, from struct
+fields, from a dereferenced expression, and from function/method parameters
+whose base type has an implementation (see `_param_type_map`). Pointer
+parameters are recorded by their base struct type, so `a->get()` and `*a += b`
+both resolve against the parameter's struct implementation.
 
 The expression parser must cover operator precedence through comma expressions,
 casts, `sizeof`, conditional expressions, calls, indexing, member access, unary
