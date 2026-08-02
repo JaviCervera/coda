@@ -99,8 +99,8 @@ impl Ball {
     }
 
     /* Move one step; reverse a velocity component when the next position
-     * would leave the playfield.  The ball stays strictly inside, so the
-     * plus-shaped sprite never writes off-screen pixels.
+     * would leave the playfield.  The ball stays strictly inside (with a
+     * 3-pixel margin), so the filled sprite never writes off-screen pixels.
      *
      * field is a foreign-struct parameter (struct r_Rect8 * from <rect.h>).
      * Parameter receivers resolve through the generated r_Rect8_* helpers,
@@ -121,13 +121,18 @@ impl Ball {
         }
     }
 
-    /* Draw a 3x3 plus-sign of pixels at the ball's position. */
+    /* Draw the ball as a filled 7x7 block.  The playfield keeps pos within
+     * [3, 252] x [3, 188], so a radius-3 block always stays fully on screen
+     * (pixel space is 0..255 x 0..191).  Being a filled block (rather than
+     * a 5-pixel plus) makes the ball clearly visible on any background.  */
     void draw(void) {
-        plot(self->pos.x, self->pos.y);
-        plot(self->pos.x - 1, self->pos.y);
-        plot(self->pos.x + 1, self->pos.y);
-        plot(self->pos.x, self->pos.y - 1);
-        plot(self->pos.x, self->pos.y + 1);
+        int dy;
+        int dx;
+        for (dy = -3; dy <= 3; dy++) {
+            for (dx = -3; dx <= 3; dx++) {
+                plot(self->pos.x + dx, self->pos.y + dy);
+            }
+        }
     }
 }
 

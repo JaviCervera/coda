@@ -1,0 +1,50 @@
+/* zx_hello.co — the minimal ZX Spectrum hello, demonstrated to work.
+ *
+ * Border in red, "hello" printed in the top-left corner.  This mirrors the
+ * ctrl_hello control program that was proven to render correctly (red
+ * border, black text) in both Fuse and ZEsarUX, so it is a guaranteed-good
+ * baseline for checking the graphics/console toolchain.
+ *
+ * OOP features on show: a value-type struct Screen with an impl block, an
+ * init constructor that stores the message to print (explicit-lifetime call
+ * from main), and clear/print instance methods invoked on the object.
+ *
+ * Build (from the repository root; output lands in examples/):
+ *
+ *     bin/codac examples/zx_hello.co --out-dir examples
+ *     zcc +zx -vn -create-app -o examples/zx_hello examples/zx_hello.c
+ *
+ * This produces examples/zx_hello.tap.  Load it in a ZX Spectrum emulator
+ * (LOAD "") and you should get a red border with "hello" in the top-left.
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <arch/zx.h>
+
+struct Screen {
+    char msg[64];
+};
+
+impl Screen {
+    init(const char *msg) {
+        strncpy(self->msg, msg, 63);
+    }
+
+    void clear() {
+        zx_border(INK_RED);
+        zx_cls();
+    }
+
+    void print() {
+        puts(self->msg);
+    }
+}
+
+int main(void) {
+    struct Screen screen;
+    screen.init("Hello");
+    screen.clear();
+    screen.print();
+    return 0;
+}
