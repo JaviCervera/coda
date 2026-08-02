@@ -18,6 +18,15 @@ class TestEmit(unittest.TestCase):
         analyzer = SemanticAnalyzer()
         analyzer.analyze(module)
 
+        specializer = Specializer(analyzer)
+        specializer.collect_templates(module)
+        specializer.discover(module)
+        for _, str_decl, impl_decl in specializer.synthetic:
+            if str_decl is not None:
+                module.top_level.append(str_decl)
+            if impl_decl is not None:
+                module.top_level.append(impl_decl)
+
         lowerer = Lowerer(analyzer)
         lowerer.lower(module)
 
@@ -42,6 +51,16 @@ class TestEmit(unittest.TestCase):
 
         analyzer = SemanticAnalyzer()
         analyzer.analyze(module)
+
+        specializer = Specializer(analyzer)
+        specializer.collect_templates(module)
+        specializer.discover(module)
+        analyzer.diagnostics.extend(specializer.diagnostics)
+        for _, str_decl, impl_decl in specializer.synthetic:
+            if str_decl is not None:
+                module.top_level.append(str_decl)
+            if impl_decl is not None:
+                module.top_level.append(impl_decl)
 
         lowerer = Lowerer(analyzer)
         lowerer.lower(module)
@@ -1104,6 +1123,153 @@ class TestEmit(unittest.TestCase):
         self.assertIn("R_deinit(r)", c)
         errors = [d for d in diags if d.severity == "error"]
         self.assertEqual([d.code for d in errors], [])
+
+
+    def test_template_emits_specialized_struct_and_methods(self):
+        source = """
+        struct Ring<T> {
+            T *data;
+            unsigned head;
+        };
+        impl Ring {
+            init(T *storage, unsigned capacity) { self->data = storage; }
+            T pop(void) { return self->data[0]; }
+        }
+        int main(void) {
+            int buf[8];
+            Ring<int> r;
+            r.init(buf, 8);
+            int v;
+            v = r.pop();
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("typedef struct coda_Ring__int coda_Ring__int;", h)
+        self.assertIn("int * data", h)
+        self.assertIn("coda_Ring__int_init", h)
+        self.assertIn("coda_Ring__int_pop", h)
+        self.assertIn("struct coda_Ring__int r", c)
+        self.assertIn("coda_Ring__int_init(&r, buf, 8)", c)
+        self.assertIn("v = coda_Ring__int_pop(&r)", c)
+        self.assertNotIn("impl", h)
+        self.assertNotIn("<int>", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_template_substitutes_return_and_param_types(self):
+        source = """
+        struct R<T> {
+            T *data;
+            unsigned head;
+        };
+        impl R {
+            void init(T *storage, unsigned capacity) { self->data = storage; }
+            T pop(void) { return self->data[0]; }
+        }
+        int main(void) {
+            char buf[8];
+            R<char> r;
+            r.init(buf, 8);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("coda_R__char_init(struct coda_R__char *self, char * storage, unsigned capacity)", h)
+        self.assertIn("char coda_R__char_pop(struct coda_R__char *self)", h)
+        self.assertNotIn(" T ", h.replace("\n", " "))
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_template_distinct_specializations(self):
+        source = """
+        struct R<T> {
+            T *data;
+            unsigned head;
+        };
+        impl R {
+            void init(T *storage, unsigned capacity) { self->data = storage; }
+        }
+        int main(void) {
+            int ibuf[2];
+            char cbuf[2];
+            R<int> ia;
+            R<char> ca;
+            ia.init(ibuf, 2);
+            ca.init(cbuf, 2);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("coda_R__int", h)
+        self.assertIn("coda_R__char", h)
+        self.assertIn("coda_R__int_init", h)
+        self.assertIn("coda_R__char_init", h)
+        errors = [d for d in diags if d.severity == "error"]
+        self.assertEqual([d.code for d in errors], [])
+
+    def test_template_same_specialization_deduped(self):
+        source = """
+        struct R<T> {
+            T *data;
+            unsigned head;
+        };
+        impl R {
+            T pop(void) { return self->data[0]; }
+        }
+        int main(void) {
+            int a[2];
+            int b[2];
+            R<int> x;
+            R<int> y;
+            (void)x;
+            (void)y;
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertEqual(h.count("struct coda_R__int {"), 1)
+        self.assertEqual(h.count("typedef struct coda_R__int"), 1)
+        errors = [d for d in diags if d.severity == "error"]
+        self.assertEqual([d.code for d in errors], [])
+
+    def test_template_no_coda_syntax_leak(self):
+        source = """
+        struct R<T> {
+            T *data;
+        };
+        impl R {
+            void init(T *storage, unsigned capacity) { self->data = storage; }
+        }
+        int main(void) {
+            int buf[2];
+            R<int> r;
+            r.init(buf, 2);
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        import re
+        self.assertNotIn("<", h)
+        self.assertNotIn(">", h)
+        self.assertFalse(re.search(r'\btemplate\b', h))
+        self.assertFalse(re.search(r'\bimpl\b', h))
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_template_recursive_by_value_cycle_detected(self):
+        source = """
+        struct Node<T> {
+            struct Node<T> child;
+        };
+        impl Node {
+            void init(void) { }
+        }
+        int main(void) {
+            Node<int> n;
+            return 0;
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        codes = [d.code for d in diags]
+        self.assertIn("E042", codes)
 
 
 if __name__ == "__main__":

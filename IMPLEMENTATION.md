@@ -200,16 +200,17 @@ At top level, recognize these Coda forms:
 ```text
 #import "path.co"
 
-template <Identifier (, Identifier)*>
-    struct-definition [: BaseName]
+struct Identifier <TypeParam (, TypeParam)*> [: BaseName] { field* }
 
-template <Identifier (, Identifier)*>
-    impl Name <TypeArg (, TypeArg)*> impl-body
-
-impl [struct] Name impl-body
+impl [struct] Identifier impl-body
 
 struct Identifier [: BaseName] { field* }
 ```
+
+A template is declared by placing the type parameters inline after the struct
+name (`struct Array<T, E> { ... }`). Its implementation is written with a bare
+`impl Array { ... }` — the template arguments are not repeated. The legacy
+`template <T> struct ...; template <T> impl ...;` preamble is rejected.
 
 Every Coda-owned struct name is automatically a type name, usable without
 the `struct` keyword anywhere in Coda source. The `struct` keyword form
@@ -336,8 +337,10 @@ method is inherited or a parameter explicitly has a base-pointer type.
 
 ## 8. Template specialization
 
-Templates support type parameters only. During semantic analysis, collect every
-concrete use such as:
+Templates support type parameters only, declared inline on the struct
+(`struct Array<T> { ... }`) with a bare `impl Array { ... }` implementation
+(no parameter list). They are collected by `Specializer.collect_templates` after
+semantic analysis. During specialization discovery, every concrete use such as:
 
 ```coda
 Array<uint8_t> bytes;
@@ -345,27 +348,35 @@ Result<struct Sprite *, ErrorCode> result;
 ```
 
 Specialization discovery is recursive: specializing `Array<T>` can expose further
-template types in fields or method signatures. Store instances in a canonical map
-keyed by `(template definition identity, canonical argument types)`, so every
-specialization is emitted once.
+template types in fields or method signatures. Instances are stored in a
+canonical map keyed by `(template definition identity, canonical argument types)`
+so every specialization is specialized once. The same specialization appearing
+in multiple modules is appended to (and by default emitted by) the module that
+declares the template.
+
+To avoid infinite layout recursion, discovery detects value-type cycles: while
+specializing a key, a struct member whose specialization key is already being
+specialized is a by-value cycle (~`E042`) and is rejected. Pointer members are
+not treated as cycles.
 
 Substitution occurs in the struct fields, implementation signatures, method
 bodies, operators, and inherited type references. Reject:
 
-- wrong number of template arguments;
-- use of an unspecialized template as an object type;
-- recursive by-value layouts;
-- template specializations and non-type arguments, which are not 0.1 features.
+- wrong number of template arguments (`E041`);
+- use of an unspecialized template as an object type (`E040`);
+- recursive by-value layouts (`E042`);
+- template specialization and non-type arguments, which are not 0.1 features.
 
-Use deterministic C names. One acceptable scheme is:
+Use deterministic C names:
 
 ```text
-Array<uint8_t>                  -> coda_Array__u8
+Array<int>                      -> coda_Array__int
 Result<struct Sprite *, Error>  -> coda_Result__Sprite_ptr__Error
 ```
 
-Escape every non-identifier character and append a short stable hash if two
-distinct canonical types would otherwise mangle to the same identifier.
+`coda_<Template>__<arg>__...` uses the same identifier mangling as the type
+system. Escape every non-identifier character and append a short stable hash if
+two distinct canonical types would otherwise mangle to the same identifier.
 
 ## 9. Object-layout lowering
 
@@ -671,9 +682,10 @@ E027 overriding method signature does not match base
 E030 unknown method
 E031 invalid method receiver
 E032 invalid method argument list
-E040 malformed template use
+E040 use of an unspecialized template as an object type
 E041 template argument count
 E042 recursive value layout
+E043 legacy 'template <...>' preamble rejected (use inline parameter list)
 E050 unsupported operator
 E051 invalid operator signature
 E052 invalid operator operand
@@ -786,15 +798,21 @@ for AST/semantic snapshots when parser failures need focused tests.
 
 ### 13.6 Template tests
 
-- `Array<uint8_t>` emits a specialized struct and methods;
-- the same specialization in multiple modules emits once;
+- `struct Array<T> { ... }` with `impl Array` emits a specialized struct and
+  methods whose names are deterministic (`coda_Array__int`);
+- the same specialization used in multiple places emits once (deduplication);
 - two different specializations receive different names;
 - nested and pointer arguments mangle deterministically;
-- `Result<T, E>` verifies multiple parameters;
+- `struct Result<T, E> { ... }` verifies multiple parameters;
+- a value member that is a value specialization of itself gives `E042`, while
+  a pointer member of the same specialization is allowed;
+- the legacy `template <...>` preamble gives `E043`;
 - wrong number of arguments gives `E041`;
 - unspecialized template as value type gives `E040`;
-- recursive by-value specializations give `E042`;
-- a template method body substitutes all occurrences of its type parameters.
+- a template method body substitutes all occurrences of its type parameters;
+- generated C contains no Coda-only tokens (`impl`, `<`/`>`, `template`);
+- a `Ring<int>` runtime test compiles with `-Wall -Wextra -Werror -std=c89`
+  and exercises push/pop/count.
 
 ### 13.7 Operator tests
 

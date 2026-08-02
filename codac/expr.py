@@ -4,7 +4,7 @@ from typing import Optional
 
 from codac.ast import Expr, Stmt, Token
 from codac.diagnostics import Diagnostic
-from codac.names import method_c_name
+from codac.names import mangle_template_name, method_c_name
 from codac.typesys import OPERATOR_NAMES, SemanticAnalyzer
 
 
@@ -174,6 +174,14 @@ def _parse_coda_declaration(c: Cursor, type_names: frozenset[str]) -> Stmt | Non
         c.pos = saved
         return None
 
+    if c.peek_spelling() == "<":
+        arg_groups = _consume_template_args(c)
+        if arg_groups is None:
+            c.pos = saved
+            return None
+        type_name = mangle_template_name(type_name, arg_groups)
+        type_tokens = [Token(kind="identifier", spelling=type_name, span=type_token.span)]
+
     if not c.peek() or c.peek().kind != "identifier":
         c.pos = saved
         return None
@@ -287,7 +295,7 @@ def _parse_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt | N
             c.advance()
             next_tok = c.peek()
 
-            if next_tok and next_tok.kind == "identifier":
+            if next_tok and (next_tok.kind == "identifier" or next_tok.spelling == "<"):
                 c.pos = saved
                 result = _parse_coda_declaration(c, type_names)
                 if result is not None:
@@ -489,6 +497,42 @@ def _parse_expr_raw(tokens: list[Token]) -> Expr | None:
         return None
     c = Cursor(tokens)
     return _parse_expr(c, 0)
+
+
+def _consume_template_args(c: Cursor) -> list[str] | None:
+    if c.peek_spelling() != "<":
+        return None
+    c.advance()
+    groups: list[str] = []
+    current: list[str] = []
+    depth = 0
+    while not c.done:
+        t = c.advance()
+        s = t.spelling
+        if s == "<":
+            depth += 1
+            current.append(s)
+        elif s == ">>":
+            if depth == 0:
+                groups.append(" ".join(current).strip())
+                return groups
+            depth -= 1
+            current.append(">")
+            if depth == 0:
+                groups.append(" ".join(current).strip())
+                return groups
+        elif s == ">":
+            if depth == 0:
+                groups.append(" ".join(current).strip())
+                return groups
+            depth -= 1
+            current.append(">")
+        elif s == "," and depth == 0:
+            groups.append(" ".join(current).strip())
+            current = []
+        else:
+            current.append(s)
+    return None
 
 
 def _build_var_info(stmts: list[Stmt], analyzer: SemanticAnalyzer) -> dict[str, tuple[str, bool]]:
@@ -951,7 +995,7 @@ def _lower_stmt(stmt: Stmt, current_struct: str, analyzer: SemanticAnalyzer,
 
 def lower_method_body(tokens: list[Token], struct_name: str, analyzer: SemanticAnalyzer,
                       param_tokens: list[list[Token]] | None = None) -> str:
-    type_names = frozenset(analyzer.structs.keys())
+    type_names = frozenset(analyzer.structs.keys()) | analyzer.template_names()
 
     stmts = _parse_stmts(tokens, type_names)
     var_info = _build_var_info(stmts, analyzer)

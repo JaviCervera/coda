@@ -397,18 +397,18 @@ Rules:
 ## Templates
 
 Coda templates are compile-time type specialization. They are intended for typed
-containers and value types, not template metaprogramming.
+containers and value types, not template metaprogramming. A template is declared
+by naming its type parameters inline on the `struct`, and its implementation
+follows with a bare `impl` (no parameter list):
 
 ```coda
-template <T>
-struct Array {
+struct Array<T> {
     T *data;
     unsigned count;
     unsigned capacity;
 };
 
-template <T>
-impl Array<T> {
+impl Array {
     init(T *storage, unsigned capacity) {
         self->data = storage;
         self->count = 0;
@@ -442,15 +442,15 @@ bytes.init(storage, 64);
 bytes.push(42);
 ```
 
-Coda emits a specialized C struct and functions, such as `Array_u8` and
-`Array_u8_push`. Every used specialization is compiled independently; there is no
-runtime generic type information.
+Coda emits a specialized C struct and functions, such as `coda_Array__uint8_t`
+and `coda_Array__uint8_t_push`. Every used specialization is compiled
+independently; there is no runtime generic type information. Only
+specializations that are referenced are instantiated.
 
 Multiple type parameters are supported for types such as `Result<T, E>`:
 
 ```coda
-template <T, E>
-struct Result {
+struct Result<T, E> {
     bool ok;
     union {
         T value;
@@ -459,8 +459,13 @@ struct Result {
 };
 ```
 
-0.1 does not include template specialization, template deduction, non-type
-parameters, template metaprogramming, or generic free functions.
+A template is only a blueprint: declaring `struct Array<T> { ... };` does not
+register a concrete type. Code must use a specialization (such as
+`Array<uint8_t> bytes;`) for concrete structs and functions to be generated,
+and value members must be supplied explicitly.
+
+0.1 does not include template specialization/templates, template deduction,
+non-type parameters, template metaprogramming, or generic free functions.
 
 ## Operator methods
 

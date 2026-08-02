@@ -65,6 +65,8 @@ class SemanticAnalyzer:
     def __init__(self):
         self.structs: dict[str, StructType] = {}
         self.implementations: dict[str, ImplementationInfo] = {}
+        self.templates: dict[str, StructDecl] = {}
+        self.template_impls: dict[str, Implementation] = {}
         self.diagnostics: list[Diagnostic] = []
         self.methods: dict[str, dict[str, MethodSig]] = {}
 
@@ -86,6 +88,10 @@ class SemanticAnalyzer:
         name = sd.name_token.spelling
         base_name: str | None = None
         fields = list(sd.fields)
+
+        if sd.template_params:
+            self.templates[name] = sd
+            return
 
         if sd.base_name_token:
             base_name = sd.base_name_token.spelling
@@ -113,6 +119,11 @@ class SemanticAnalyzer:
 
     def _register_implementation(self, impl: Implementation, module_path: str):
         struct_name = "".join(t.spelling for t in impl.name_tokens)
+
+        if struct_name in self.templates:
+            self.template_impls[struct_name] = impl
+            return
+
         st = self.structs.get(struct_name)
         base_name = st.base_name if st else None
 
@@ -219,6 +230,18 @@ class SemanticAnalyzer:
 
     def get_struct(self, name: str) -> StructType | None:
         return self.structs.get(name)
+
+    def get_template(self, name: str) -> StructDecl | None:
+        return self.templates.get(name)
+
+    def template_names(self) -> frozenset[str]:
+        return frozenset(self.templates.keys())
+
+    def register_specialized_struct(self, sd: StructDecl, module_path: str):
+        self._register_struct(sd, module_path)
+
+    def register_specialized_impl(self, impl: Implementation, module_path: str):
+        self._register_implementation(impl, module_path)
 
     def get_implementation(self, name: str) -> ImplementationInfo | None:
         return self.implementations.get(name)

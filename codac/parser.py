@@ -106,7 +106,12 @@ class Parser:
             return None
 
         if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "template":
-            return self._parse_template()
+            self.diagnostics.append(Diagnostic(
+                code="E043", message="'template <T>' preamble removed; write 'struct Name<T>' instead",
+                span=self.tokens.current.span,
+            ))
+            self.tokens.advance()
+            return TopLevelDecl(kind="preserved", token=Token("template", "", Span(self.path, 0, 1, 1)), preserved_tokens=[])
 
         if self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "impl":
             return self._parse_implementation()
@@ -233,6 +238,8 @@ class Parser:
             return TopLevelDecl(kind="preserved", token=struct_token, preserved_tokens=[struct_token])
 
         self.tokens.advance()
+        template_params = self._parse_template_params_after_name()
+
         base_name_token: Token | None = None
         if self.tokens.current and self.tokens.current.spelling == ":":
             self.tokens.advance()
@@ -268,16 +275,32 @@ class Parser:
 
         self._skip_to_semicolon_if_present()
 
+        sd = StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token)
+        if template_params:
+            sd.template_params = template_params
+            return TopLevelDecl(kind="template", token=template_params[0],
+                                body=TemplateDecl(params=template_params, body=sd))
+
         if self._is_coda_owned_struct(name_token.spelling):
-            return TopLevelDecl(
-                kind="struct", token=struct_token,
-                body=StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token),
-            )
-        return TopLevelDecl(
-            kind="struct", token=struct_token,
-            body=StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token),
-            is_foreign=False,
-        )
+            return TopLevelDecl(kind="struct", token=struct_token, body=sd)
+        return TopLevelDecl(kind="struct", token=struct_token, body=sd, is_foreign=False)
+
+    def _parse_template_params_after_name(self) -> list[Token]:
+        params: list[Token] = []
+        if not (self.tokens.current and self.tokens.current.spelling == "<"):
+            return params
+        self.tokens.advance()
+        while self.tokens.current:
+            t = self.tokens.advance()
+            if t.spelling == ">":
+                break
+            if t.spelling == ",":
+                continue
+            if t.kind == "identifier":
+                params.append(t)
+        else:
+            self.errors.append("unterminated template parameter list")
+        return params
 
     def _is_coda_owned_struct(self, name: str) -> bool:
         i = self.tokens.pos
@@ -298,78 +321,6 @@ class Parser:
                 break
             i += 1
         return False
-
-    def _parse_template(self) -> TopLevelDecl:
-        self.tokens.advance()
-        self.tokens.expect("<", "expected '<' after template")
-        params: list[Token] = []
-        while self.tokens.current:
-            t = self.tokens.advance()
-            if t.spelling == ">":
-                break
-            if t.spelling == ",":
-                continue
-            if t.kind == "identifier":
-                params.append(t)
-        else:
-            self.errors.append("unterminated template parameter list")
-
-        if self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "struct":
-            struct_decl = self._parse_struct_decl()
-            if struct_decl:
-                struct_decl.template_params = params
-            return TopLevelDecl(kind="template", token=params[0] if params else Token("template", "", Span(self.path, 0, 1, 1)), body=TemplateDecl(params=params, body=struct_decl))
-
-        if self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "impl":
-            impl = self._parse_implementation_body()
-            if impl:
-                impl.template_args = [[p] for p in params]
-            return TopLevelDecl(kind="template", token=params[0] if params else Token("template", "", Span(self.path, 0, 1, 1)), body=TemplateDecl(params=params, body=impl))
-
-        self.errors.append("template must be followed by struct or impl")
-        return TopLevelDecl(kind="preserved", token=params[0] if params else Token("template", "", Span(self.path, 0, 1, 1)), preserved_tokens=[])
-
-    def _parse_struct_decl(self) -> StructDecl | None:
-        if not (self.tokens.current and self.tokens.current.kind == "keyword" and self.tokens.current.spelling == "struct"):
-            return None
-        self.tokens.advance()
-        name_token = self.tokens.current
-        if name_token is None or name_token.kind not in ("identifier", "keyword"):
-            return None
-        self.tokens.advance()
-        base_name_token: Token | None = None
-        if self.tokens.current and self.tokens.current.spelling == ":":
-            self.tokens.advance()
-            bt = self.tokens.current
-            if bt and bt.kind in ("identifier", "keyword"):
-                base_name_token = bt
-                self.tokens.advance()
-        fields: list[FieldDecl] = []
-        if self.tokens.current and self.tokens.current.spelling == "{":
-            self.tokens.advance()
-            depth = 1
-            field_tokens: list[Token] = []
-            while self.tokens.current:
-                if self.tokens.current.spelling == "{":
-                    depth += 1
-                    field_tokens.append(self.tokens.advance())
-                elif self.tokens.current.spelling == "}":
-                    depth -= 1
-                    if depth == 0:
-                        break
-                    field_tokens.append(self.tokens.advance())
-                elif self.tokens.current.spelling == ";" and depth == 1:
-                    field_tokens.append(self.tokens.advance())
-                    if field_tokens:
-                        fields.append(FieldDecl(tokens=list(field_tokens)))
-                        field_tokens = []
-                else:
-                    field_tokens.append(self.tokens.advance())
-            if field_tokens:
-                fields.append(FieldDecl(tokens=field_tokens))
-            self.tokens.advance()
-        self._skip_to_semicolon_if_present()
-        return StructDecl(name_token=name_token, fields=fields, base_name_token=base_name_token)
 
     def _parse_implementation(self) -> TopLevelDecl | None:
         token = self.tokens.advance()

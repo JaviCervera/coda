@@ -147,8 +147,7 @@ class TestParser(unittest.TestCase):
 
     def test_template_struct(self):
         source = """
-        template <T>
-        struct Array {
+        struct Array<T> {
             T *data;
             unsigned count;
         };
@@ -162,8 +161,7 @@ class TestParser(unittest.TestCase):
 
     def test_multi_template(self):
         source = """
-        template <T, E>
-        struct Result {
+        struct Result<T, E> {
             bool ok;
             union { T value; E error; } data;
         };

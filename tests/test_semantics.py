@@ -275,6 +275,38 @@ class TestSemantics(unittest.TestCase):
         self.assertTrue(info.methods["get_value"].is_override)
         self.assertTrue(info.methods["get_value"].is_const)
 
+    def test_template_registered_not_concrete(self):
+        source = """
+        struct Ring<T> {
+            T *data;
+            unsigned count;
+        };
+        """
+        analyzer, _ = self.analyze(source)
+        self.assertIsNone(analyzer.get_struct("Ring"),
+                          "template must not be registered as a concrete struct")
+        self.assertIsNotNone(analyzer.get_template("Ring"))
+        self.assertIn("Ring", analyzer.template_names())
+
+    def test_template_impl_registered_as_template(self):
+        source = """
+        struct Ring<T> {
+            T *data;
+            unsigned count;
+        };
+        impl Ring {
+            void push(T value) { }
+        }
+        """
+        analyzer, _ = self.analyze(source)
+        self.assertIsNone(analyzer.get_implementation("Ring"),
+                          "template impl must not be a concrete implementation")
+        self.assertIn("Ring", analyzer.template_impls)
+
+    def test_template_registered_via_typedef_not(self):
+        analyzer, _ = self.analyze("")
+        self.assertEqual(analyzer.template_names(), frozenset())
+
 
 if __name__ == "__main__":
     unittest.main()

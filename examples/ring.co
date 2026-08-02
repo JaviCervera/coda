@@ -1,0 +1,90 @@
+/* ring.co — template instantiation example.
+ *
+ * Coda 0.1 templates are compile-time type specialization written inline on
+ * the struct name:  `struct Ring<T> { ... };`.  Using the specialization as a
+ * value type (`Ring<int> r;`) triggers instantiation discovery; the compiler
+ * emits one concrete C struct and a set of generated methods per used
+ * argument type, e.g. `coda_Ring__int` with `coda_Ring__int_init`,
+ * `coda_Ring__int_push`, and `coda_Ring__int_pop`.  There is no runtime
+ * generic type information.
+ *
+ * Build (from the repository root; output lands in a build dir):
+ *
+ *     python -m codac examples/ring.co --out-dir build
+ *     cc -std=c89 -Wall -Wextra -Werror -Ibuild -o build/ring build/ring.c
+ *     ./build/ring; echo $?
+ *
+ * The program prints 0 on success.
+ */
+
+#include <stdio.h>
+
+struct Ring<T> {
+    T *data;
+    unsigned head;
+    unsigned count;
+    unsigned capacity;
+};
+
+impl Ring {
+    init(T *storage, unsigned capacity) {
+        self->data = storage;
+        self->head = 0;
+        self->count = 0;
+        self->capacity = capacity;
+    }
+
+    int push(T value) {
+        if (self->count == self->capacity) {
+            return 0;
+        }
+        self->data[(self->head + self->count) % self->capacity] = value;
+        self->count++;
+        return 1;
+    }
+
+    T pop(void) {
+        T value = self->data[self->head];
+        self->head = (self->head + 1) % self->capacity;
+        self->count--;
+        return value;
+    }
+
+    int count(void) {
+        return self->count;
+    }
+}
+
+int main(void) {
+    int ibuf[4];
+    Ring<int> ir;
+    ir.init(ibuf, 4);
+    ir.push(10);
+    ir.push(20);
+    ir.push(30);
+
+    int first;
+    first = ir.pop();
+    int second;
+    second = ir.pop();
+    if (first != 10 || second != 20) {
+        return 1;
+    }
+
+    char cbuf[4];
+    Ring<char> cr;
+    cr.init(cbuf, 4);
+    cr.push('a');
+    cr.push('b');
+    cr.push('c');
+
+    char c;
+    c = cr.pop();
+    if (c != 'a') {
+        return 1;
+    }
+
+    printf("ring<int> first=%d second=%d count=%d; ring<char> first=%c\n",
+           first, second, ir.count(), cr.pop());
+    return 0;
+}

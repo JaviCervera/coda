@@ -47,6 +47,16 @@ def main():
         specializer.collect_templates(mod)
     all_diagnostics.extend(specializer.diagnostics)
 
+    for mod in all_modules:
+        specializer.discover(mod)
+    all_diagnostics.extend(specializer.diagnostics)
+
+    for module_obj, str_decl, impl_decl in specializer.synthetic:
+        if str_decl is not None:
+            module_obj.top_level.append(str_decl)
+        if impl_decl is not None:
+            module_obj.top_level.append(impl_decl)
+
     lowerer = Lowerer(analyzer)
     for mod in all_modules:
         lowerer.lower(mod, finalize=False)

@@ -6,6 +6,7 @@ import unittest
 from codac.emit import Emitter
 from codac.lower import Lowerer
 from codac.parser import Parser
+from codac.specialize import Specializer
 from codac.typesys import SemanticAnalyzer
 
 
@@ -16,6 +17,15 @@ class TestRuntime(unittest.TestCase):
 
         analyzer = SemanticAnalyzer()
         analyzer.analyze(module)
+
+        specializer = Specializer(analyzer)
+        specializer.collect_templates(module)
+        specializer.discover(module)
+        for _, str_decl, impl_decl in specializer.synthetic:
+            if str_decl is not None:
+                module.top_level.append(str_decl)
+            if impl_decl is not None:
+                module.top_level.append(impl_decl)
 
         lowerer = Lowerer(analyzer)
         lowerer.lower(module)
@@ -377,6 +387,92 @@ class TestRuntime(unittest.TestCase):
         struct Runner r;
         int result = Runner_run(&r, &a);
         if (result != 7) return 1;
+        """
+        self._compile_and_run(source, "", test_main)
+
+    def test_template_ring_runtime(self):
+        source = """
+        struct Ring<T> {
+            T *data;
+            unsigned head;
+            unsigned count;
+            unsigned capacity;
+        };
+        impl Ring {
+            init(T *storage, unsigned capacity) {
+                self->data = storage;
+                self->head = 0;
+                self->count = 0;
+                self->capacity = capacity;
+            }
+            int push(T value) {
+                if (self->count >= self->capacity) { return 0; }
+                self->data[(self->head + self->count) % self->capacity] = value;
+                self->count++;
+                return 1;
+            }
+            T pop(void) {
+                T value = self->data[self->head];
+                self->head = (self->head + 1) % self->capacity;
+                self->count--;
+                return value;
+            }
+            int count(void) { return self->count; }
+        }
+        struct Runner { int dummy; };
+        impl Runner {
+            int run(void) {
+                int buf[4];
+                Ring<int> r;
+                r.init(buf, 4);
+                if (r.push(3) != 1) { return 1; }
+                if (r.push(5) != 1) { return 2; }
+                if (r.push(7) != 1) { return 3; }
+                int v;
+                v = r.pop();
+                if (v != 3) { return 4; }
+                v = r.pop();
+                if (v != 5) { return 5; }
+                if (r.count() != 1) { return 6; }
+                return 0;
+            }
+        }
+        """
+        test_main = """
+        struct Runner r;
+        return Runner_run(&r);
+        """
+        self._compile_and_run(source, "", test_main)
+
+    def test_template_coda_method_call_in_body_runtime(self):
+        source = """
+        struct Ring<T> {
+            T *data;
+            unsigned count;
+        };
+        impl Ring {
+            void init(T *storage) { self->data = storage; self->count = 0; }
+            void push(T value) { self->data[self->count++] = value; }
+            T pop(void) { return self->data[--self->count]; }
+        }
+        struct Runner { int dummy; };
+        impl Runner {
+            int run(void) {
+                int buf[4];
+                Ring<int> r;
+                r.init(buf);
+                r.push(100);
+                r.push(200);
+                int v;
+                v = r.pop();
+                return v;
+            }
+        }
+        """
+        test_main = """
+        struct Runner r;
+        int result = Runner_run(&r);
+        if (result != 200) return 1;
         """
         self._compile_and_run(source, "", test_main)
 

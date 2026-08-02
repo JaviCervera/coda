@@ -16,7 +16,7 @@ compiler architecture and lowering strategy are documented in
   auto-injected `struct Shape base;` field
 - **Virtual dispatch** — `virtual double area(void);` + `override` in derived
 - **Operator overloading** — `struct Vec2 operator+(struct Vec2 rhs) { ... }`
-- **Templates** — `template<T> struct Array { ... }`
+- **Templates** — `struct Array<T> { ... }` + `impl Array { ... }`
 - **Foreign struct extensions** — extra methods on C types via `foreign impl`
 - **Imports** — modular compilation across `.co` files
 - **Lossless lexer + structural parser** — preserves `#include`, `typedef`,
@@ -247,7 +247,7 @@ Pipeline phases from [`IMPLEMENTATION.md`](IMPLEMENTATION.md):
 | Import scan & module graph | ✅ |
 | Structural parse | ✅ |
 | Semantic collection & type resolution | ✅ |
-| Template-instantiation discovery | ❌ not wired |
+| Template-instantiation discovery | ✅ |
 | Object-model layout & virtual-slot calculation | ✅ |
 | Expression lowering (method calls) | ✅ |
 | Operator lowering | ❌ not implemented |
@@ -259,7 +259,7 @@ Acceptance criteria:
 
 | Criterion | Status |
 |---|---|
-| All tests pass | ⚠️ 59 pass; operator/template/error tests not yet written |
+| All tests pass | ✅ 140 pass (incl. template + runtime) |
 | No Coda syntax in generated C | ✅ |
 | Representative fixtures compile with host C89 | ✅ |
 | z88dk integration | ❌ not tested |
