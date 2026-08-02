@@ -331,6 +331,31 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile_and_run(source, "", test_main)
 
+    def test_ternary_return_runtime(self):
+        source = """
+        struct Runner { int dummy; };
+        impl Runner {
+            int equal(void) {
+                int v = 7;
+                return v == 7 ? 0 : 1;
+            }
+            int not_equal(void) {
+                int v = 8;
+                return v == 7 ? 0 : 1;
+            }
+            int subexpr(void) {
+                return (1 ? 2 : 3) < 5 ? 4 : 5;
+            }
+        }
+        """
+        test_main = """
+        struct Runner r;
+        if (Runner_equal(&r) != 0) return 1;
+        if (Runner_not_equal(&r) != 1) return 2;
+        if (Runner_subexpr(&r) != 4) return 3;
+        """
+        self._compile_and_run(source, "", test_main)
+
     def test_operator_inside_loop_runtime(self):
         source = """
         struct Acc { int total; };

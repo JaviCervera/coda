@@ -744,6 +744,47 @@ class TestEmit(unittest.TestCase):
         self.assertIn("Fix16_operator_add(&a, Fix16_operator_mul(&b, c))", c)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
+    def test_ternary_return(self):
+        source = """
+        struct Example { int dummy; };
+        impl Example {
+            int test(void) {
+                int v = 7;
+                return v == 7 ? 0 : 1;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("return v == 7 ? 0 : 1;", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_ternary_assignment(self):
+        source = """
+        struct Pair { int a; int b; };
+        impl Pair {
+            int test(void) {
+                Pair r = cond ? x : y;
+                return r.a;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("struct Pair r = cond ? x : y;", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_ternary_subexpression(self):
+        source = """
+        struct Example { int dummy; };
+        impl Example {
+            int test(void) {
+                return (a ? b : c) < 5;
+            }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("(a ? b : c) < 5", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
     def test_no_coda_syntax_in_operator_output(self):
         source = """
         struct Fix16 { int raw; };

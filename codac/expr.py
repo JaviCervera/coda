@@ -16,16 +16,17 @@ DECL_KEYWORDS = frozenset({
 
 PREC = {
     "=": 1, "+=": 1, "-=": 1, "*=": 1, "/=": 1, "%=": 1,
-    "||": 2,
-    "&&": 3,
-    "|": 4,
-    "^": 5,
-    "&": 6,
-    "==": 7, "!=": 7,
-    "<": 8, ">": 8, "<=": 8, ">=": 8,
-    "<<": 9, ">>": 9,
-    "+": 10, "-": 10,
-    "*": 11, "/": 11, "%": 11,
+    "?": 2,
+    "||": 3,
+    "&&": 4,
+    "|": 5,
+    "^": 6,
+    "&": 7,
+    "==": 8, "!=": 8,
+    "<": 9, ">": 9, "<=": 9, ">=": 9,
+    "<<": 10, ">>": 10,
+    "+": 11, "-": 11,
+    "*": 12, "/": 12, "%": 12,
 }
 
 UNARY_OPS = frozenset({"&", "*", "+", "-", "!", "~", "++", "--"})
@@ -114,6 +115,15 @@ def _parse_expr(c: Cursor, min_prec: int) -> Expr | None:
         if prec == 0 or prec <= min_prec:
             break
 
+        if s == "?":
+            c.advance()
+            then_expr = _parse_expr(c, 0)
+            c.match(":")
+            else_expr = _parse_expr(c, prec - 1)
+            left = Expr(kind="ternary", token=Token("punctuator", "?", None),
+                        children=[left, then_expr, else_expr])
+            continue
+
         c.advance()
         right = _parse_expr(c, prec)
         left = Expr(kind="binary", token=Token("punctuator", s, None), children=[left, right] if right else [left])
@@ -134,7 +144,7 @@ def _parse_prefix(c: Cursor) -> Expr | None:
 
     if t.spelling in UNARY_OPS:
         c.advance()
-        operand = _parse_expr(c, 12)
+        operand = _parse_expr(c, 13)
         return Expr(kind="unary", token=t, children=[operand] if operand else [])
 
     if t.spelling in ("sizeof",):
@@ -799,6 +809,11 @@ def _emit_expr(expr: Expr | None) -> str:
         lhs = _emit_expr(expr.children[0]) if expr.children else ""
         rhs = _emit_expr(expr.children[1]) if len(expr.children) > 1 else ""
         return f"{lhs} {expr.token.spelling} {rhs}"
+    if expr.kind == "ternary":
+        cond = _emit_expr(expr.children[0]) if expr.children else ""
+        then = _emit_expr(expr.children[1]) if len(expr.children) > 1 else ""
+        els = _emit_expr(expr.children[2]) if len(expr.children) > 2 else ""
+        return f"{cond} ? {then} : {els}"
     if expr.kind == "sizeof":
         return "sizeof"
     if expr.kind == "cast":
