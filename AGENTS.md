@@ -53,6 +53,15 @@ and tests.
 - Keep output suitable for inspection and debugging; use `#line` directives for
   user-originated code where practical.
 
+## Bug reporting
+
+- A bug directly related to the compiler work currently in scope may be fixed
+  directly.
+- For any other bug, first check whether an issue already exists for it in the
+  current repository.
+- If no issue exists, create a new one in the current repository with the label
+  `bug`.
+
 ## Documentation
 
 - Update `LANGUAGE.md` for user-visible syntax or semantic changes.
