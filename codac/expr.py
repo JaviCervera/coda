@@ -336,6 +336,13 @@ def _parse_stmt(c: Cursor, type_names: frozenset[str] = frozenset()) -> Stmt | N
                     return _parse_raw_until_semicolon(c)
             c.pos = saved
 
+        else:
+            next_idx = saved + 1
+            next_tok = c.tokens[next_idx] if next_idx < len(c.tokens) else None
+            if next_tok and (next_tok.kind == "identifier" or next_tok.spelling == "*"):
+                c.pos = saved
+                return _parse_raw_until_semicolon(c)
+
     return _parse_expr_stmt(c, type_names)
 
 

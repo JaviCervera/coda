@@ -479,6 +479,23 @@ class TestEmit(unittest.TestCase):
         h, c, diags = self._emit_with_diagnostics(source)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
+    def test_typedef_decl_passthrough(self):
+        source = """
+        int main(void) {
+            uint8_t storage[8];
+            uint16_t value = 5;
+            uint8_t v;
+            uint8_t *ptr;
+            return 0;
+        }
+        """
+        _, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("uint8_t storage[8];", c)
+        self.assertIn("uint16_t value = 5;", c)
+        self.assertIn("uint8_t v;", c)
+        self.assertIn("uint8_t *ptr;", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
 
     def test_multi_module_import(self):
         with tempfile.TemporaryDirectory() as tmpdir:
