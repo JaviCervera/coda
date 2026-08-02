@@ -29,3 +29,9 @@ jobs:
           cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \
              -o /tmp/shapes_ci /tmp/ci/shapes.c examples/shapes_c.c &&
           /tmp/shapes_ci
+      - name: Templates example
+        run: |
+          python -m codac examples/ring.co --out-dir /tmp/ci &&
+          cc -std=c89 -Wall -Wextra -Werror -I/tmp/ci \
+             -o /tmp/ring_ci /tmp/ci/ring.c &&
+          /tmp/ring_ci
