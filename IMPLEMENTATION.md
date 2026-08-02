@@ -263,6 +263,19 @@ casts, `sizeof`, conditional expressions, calls, indexing, member access, unary
 operators, and assignment expressions. It should emit an AST only for expressions
 that contain Coda syntax; token-preserved emission is sufficient for all others.
 
+`(Type)operand` casts are recognized syntactically wherever a parenthesized type
+precedes an operand (`(T)0`, `(int)r.pop()`, `(struct X *)p`). The cast is
+represented as an AST `cast` node carrying the reconstructed type string and the
+lowered operand subtree, so Coda method calls and template substitutions inside
+the operand still go through the standard expression lowering. Type detection is
+conservative: a parenthesized expression is only treated as a cast when the
+enclosed token sequence is a type-name (`*`, a `struct`/`union`/`enum` keyword, a
+fundamental or qualified type keyword, or an identifier) followed by an
+operand-starting token. When the type is a bare identifier (`(x)`), an
+ambiguous case, the conservative gate requires an unambiguous operand
+(identifier, literal, or `(`), so grouped-value expressions such as `(x) * 3`
+keep their grouping semantics rather than being reinterpreted as a cast.
+
 ## 7. Semantic model
 
 Create explicit semantic objects for the following:

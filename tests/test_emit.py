@@ -466,6 +466,69 @@ class TestEmit(unittest.TestCase):
         self.assertIn("Message_print(&msg)", c)
         self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
 
+    def test_cast_expression_statement(self):
+        source = """
+        struct Bar { int n; };
+        impl Bar {
+            void zero(void) { self->n = (int)0; }
+        }
+        int main(void) { Bar b; b.zero(); return b.n; }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("self->n = (int)0;", c)
+        self.assertNotIn("= ();", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_cast_preserves_lowered_operand(self):
+        source = """
+        struct Ring { int data; int n; };
+        impl Ring {
+            int pop(void) { return self->data; }
+            void run(void) { Ring r; r.data = 7; r.n = (int)r.pop(); }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("r.n = (int)Ring_pop(&r);", c)
+        self.assertNotIn("r.n = (int)r.pop();", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_cast_pointer_type(self):
+        source = """
+        struct Box { int x; };
+        struct Helper { int dummy; };
+        impl Helper {
+            int run(struct Box *b) { return (void *)-1 ? 0 : ((struct Box *)b)->x; }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("(void *)-1", c)
+        self.assertIn("((struct Box *)b)->x", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
+    def test_template_cast_operand_substituted(self):
+        source = """
+        struct FixedArray<T> { T data[4]; };
+        impl FixedArray<T> {
+            void clear(void) { for (int i = 0; i < 4; i++) data[i] = (T)0; }
+        }
+        int main(void) { FixedArray<int> a; a.clear(); return 0; }
+        """
+        c = self.emit_source(source)[1]
+        self.assertIn("data[i] = (int)0;", c)
+        self.assertNotIn("= (int);", c)
+        self.assertNotIn("= ();", c)
+
+    def test_grouped_value_expression_not_cast(self):
+        source = """
+        struct Helper { int dummy; };
+        impl Helper {
+            int run(int x) { return (x) * 3; }
+        }
+        """
+        h, c, diags = self._emit_with_diagnostics(source)
+        self.assertIn("return (x) * 3;", c)
+        self.assertEqual(len([d for d in diags if d.severity == "error"]), 0)
+
     def test_array_decl_passthrough(self):
         source = """
         struct Point { int x; int y; };

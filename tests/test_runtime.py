@@ -501,6 +501,21 @@ class TestRuntime(unittest.TestCase):
         """
         self._compile_and_run(source, "", test_main)
 
+    def test_cast_method_call_runtime(self):
+        source = """
+        struct Ring { int data; int n; };
+        impl Ring {
+            int pop(void) { return self->data; }
+            int run(void) { Ring r; r.data = 42; r.n = (int)r.pop(); return r.n; }
+        }
+        """
+        test_main = """
+        struct Ring r;
+        int result = Ring_run(&r);
+        if (result != 42) return 7;
+        """
+        self._compile_and_run(source, "", test_main)
+
 
 if __name__ == "__main__":
     unittest.main()

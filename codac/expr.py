@@ -131,12 +131,113 @@ def _parse_expr(c: Cursor, min_prec: int) -> Expr | None:
     return left
 
 
+CAST_TYPE_KEYWORDS = frozenset({
+    "void", "char", "short", "int", "long", "float", "double",
+    "signed", "unsigned", "const", "volatile",
+    "struct", "union", "enum",
+})
+
+FUNDAMENTAL_TYPE_KEYWORDS = frozenset({
+    "void", "char", "short", "int", "long", "float", "double",
+    "signed", "unsigned",
+})
+
+
+def _classify_cast_type(tokens: list[Token]) -> tuple[bool, bool]:
+    """Return (is_type, definitely_a_type) for a candidate cast type.
+
+    A sequence of '*' and C type tokens is a 'type' when it contains at least
+    one leaf.  It is 'definitely' a type (never a grouping value) when it also
+    contains a pointer star, a struct/union/enum keyword, or a fundamental type
+    keyword -- anything a parenthesized value expression cannot be.
+    """
+    if not tokens:
+        return False, False
+    leaf = False
+    definite = False
+    for t in tokens:
+        s = t.spelling
+        if s == "*":
+            definite = True
+            continue
+        if t.kind == "keyword":
+            if s == "struct" or s == "union" or s == "enum":
+                leaf = True
+                definite = True
+            elif s in FUNDAMENTAL_TYPE_KEYWORDS:
+                leaf = True
+                definite = True
+            elif s in CAST_TYPE_KEYWORDS:
+                leaf = True
+            else:
+                return False, False
+        elif t.kind == "identifier":
+            leaf = True
+        else:
+            return False, False
+    return leaf, definite
+
+
+def _starts_cast_operand(t: Token | None, definite: bool) -> bool:
+    if t is None:
+        return False
+    if t.kind in ("identifier", "numeric_literal", "string_literal", "char_literal"):
+        return True
+    if t.spelling == "(":
+        return True
+    if definite and t.spelling in ("&", "*", "!", "~", "+", "-", "++", "--"):
+        return True
+    return definite and t.spelling == "sizeof"
+
+
+def _try_parse_cast(c: Cursor) -> Expr | None:
+    """Parse a C-style cast '(Type)operand' at a leading '*' cursor position.
+
+    Returns None (with the cursor untouched) if the parenthesized text is not a
+    recognizable type-name followed by an operand.  The caller restores the
+    cursor and falls back to grouping.
+    """
+    start = c.pos
+    c.advance()
+    depth = 1
+    i = c.pos
+    while i < len(c.tokens) and depth > 0:
+        s = c.tokens[i].spelling
+        if s == "(":
+            depth += 1
+        elif s == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    if depth != 0 or i >= len(c.tokens):
+        c.pos = start
+        return None
+    inner = c.tokens[c.pos:i]
+    close = i
+    nxt = c.tokens[close + 1] if close + 1 < len(c.tokens) else None
+    is_type, definite = _classify_cast_type(inner)
+    if not is_type or not _starts_cast_operand(nxt, definite):
+        c.pos = start
+        return None
+    type_str = " ".join(t.spelling for t in inner).strip()
+    type_tok = Token(kind="identifier", spelling=type_str, span=inner[0].span)
+    c.pos = close + 1
+    operand = _parse_expr(c, 0)
+    return Expr(kind="cast", token=type_tok, children=[operand] if operand else [])
+
+
 def _parse_prefix(c: Cursor) -> Expr | None:
     t = c.peek()
     if t is None:
         return None
 
     if t.spelling == "(":
+        saved = c.pos
+        cast = _try_parse_cast(c)
+        if cast is not None:
+            return cast
+        c.pos = saved
         c.advance()
         expr = _parse_expr(c, 0)
         c.match(")")
